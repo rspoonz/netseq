@@ -1,7 +1,7 @@
 import type { Database } from "bun:sqlite";
 import { stat } from "node:fs/promises";
 import { join, resolve, sep } from "node:path";
-import { AgentError, addBlocks, editBlock, pageOutline } from "./agent";
+import { AgentError, addBlocks, editBlock, moveBlock, pageOutline } from "./agent";
 import { applyBatch, BadBatch, parseBatch, pruneHistory, renamePage } from "./apply";
 import { dailyBackup } from "./backup";
 import { openDb, schemaVersion } from "./db";
@@ -171,10 +171,12 @@ async function api(req: Request, url: URL, db: Database, hub: EventHub): Promise
       return outline === null ? Response.json({ error: "no such page" }, { status: 404 }) : markdown(outline);
     }
     case "POST /api/agent/add":
-    case "POST /api/agent/edit": {
+    case "POST /api/agent/edit":
+    case "POST /api/agent/move": {
       const body = await req.json().catch(() => null);
+      const write = { "/api/agent/add": addBlocks, "/api/agent/edit": editBlock, "/api/agent/move": moveBlock }[url.pathname];
       try {
-        const { result, ...reply } = url.pathname.endsWith("/add") ? addBlocks(db, body) : editBlock(db, body);
+        const { result, ...reply } = write!(db, body);
         if (result) hub.publish("change", result);
         return Response.json(reply);
       } catch (e) {

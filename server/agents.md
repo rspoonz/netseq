@@ -56,7 +56,7 @@ For example `(and [[Project X]] (task TODO DOING))`. To find blocks about a topi
 
 Send JSON with `Content-Type: application/json` (anything else gets a 415). Changes show up straight away in any open NetSeq tab. Errors come back as `{"error": "…"}` with status 400, or 404 for a page or block that doesn't exist.
 
-Add `"agent": "<your name>"` (e.g. `"Claude"`) to add and edit requests. The owner then sees your changes as "Claude (agent)" in a block's history; without it, they show as "Agent".
+Add `"agent": "<your name>"` (e.g. `"Claude"`) to add, edit and move requests. The owner then sees your changes as "Claude (agent)" in a block's history; without it, they show as "Agent".
 
 `POST /api/agent/add`: adds blocks. Give `text` and exactly one of these to say where they go:
 
@@ -89,6 +89,54 @@ or, after a block:
 ```
 
 `content` is the block's whole new text, every line of it, without the outline's indentation or `id::` lines. It's not an outline. In `expect`, indentation and `id::` lines copied from the outline don't matter. If the block no longer says what you expected, nothing changes and the answer is a 409 with its current text, `{"error": "…", "content": "…"}`: check that your edit still makes sense, then send it again with the new `expect`. The text an edit replaces is kept in the block's history ("Earlier versions" in its bullet menu) for 30 days. The answer is `{"id": "…", "page": "…"}`.
+
+`POST /api/agent/move`: moves a block and everything under it. It keeps its id, so `((refs))` to it still work. Give `id` and exactly one of these:
+
+| Give | The block goes |
+|---|---|
+| `page`, `parent`, `after` or `before` | where adding would put new blocks (see the table above). A `page` that doesn't exist yet is created |
+| `"indent": true` | one level down: under the block above it at its level, as that block's last child |
+| `"outdent": true` | one level up: right after its parent. The blocks that came after it under that parent move under it |
+
+```json
+{ "id": "0d9b6c3a-58e2-4f0e-b7a1-7c2e4f6a9d21", "outdent": true, "agent": "Claude" }
+```
+
+Indent and outdent work like Tab and Shift+Tab in NetSeq and Logseq. "The block above it at its level" is the previous block with the same parent, which isn't always the line just above: in the first outline below, indenting `C` puts it under `A`, after `A1`, not under `A1`. Outdenting takes the blocks after it along. To move only the block one level up, use `"after"` with its parent's id instead. In these outlines the `id::` lines are left out:
+
+```markdown
+- A
+	- A1
+- C
+```
+
+```markdown
+- A
+	- B
+	- C
+		- D
+	- E
+```
+
+Outdenting `C` in the second outline gives the first result below, and `{"id": "<C>", "after": "<A>"}` gives the second:
+
+```markdown
+- A
+	- B
+- C
+	- D
+	- E
+```
+
+```markdown
+- A
+	- B
+	- E
+- C
+	- D
+```
+
+A move is refused (400) if there's no block above to indent under, if the block is already at the top level for an outdent, or if it would go next to itself, under itself or under a block inside it. The answer is the block's id and the page it's on now: `{"id": "…", "page": "…"}`.
 
 `POST /api/rename`: renames a page and rewrites every link to it, `{"from": "Old name", "to": "New name"}`. It answers 409 if a page with the new name already exists.
 

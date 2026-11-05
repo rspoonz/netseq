@@ -313,7 +313,8 @@ function repair(db: Database, touched: Set<string>, emptied: Set<string>, rev: n
   }
 }
 
-function createsCycle(db: Database, id: string, parent: string): boolean {
+/** Whether giving block `id` this parent would put it under itself. */
+export function createsCycle(db: Database, id: string, parent: string): boolean {
   const parentOf = db.query("SELECT parent FROM blocks WHERE id = ?");
   const seen = new Set<string>();
   for (let current: string | null = parent; current !== null; ) {
