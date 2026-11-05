@@ -74,9 +74,10 @@ export function pageFile(page: PageSummary): string {
 
 /**
  * A page's blocks as Logseq writes them. Folded blocks get `collapsed:: true`, and blocks that
- * other blocks reference get `id:: <uuid>`, so their ((references)) still resolve.
+ * other blocks reference get `id:: <uuid>`, so their ((references)) still resolve. With
+ * `allIds`, every block gets its id (for agents, who address blocks by id).
  */
-export function pageMarkdown(blocks: Block[]): string {
+export function pageMarkdown(blocks: Block[], { allIds = false } = {}): string {
   const byId = new Map(blocks.map((b) => [b.id, b]));
   const children = new Map<string | null, string[]>();
   for (const b of [...blocks].sort(compareSiblings)) {
@@ -94,7 +95,7 @@ export function pageMarkdown(blocks: Block[]): string {
         const b = byId.get(id)!;
         return [
           ...(b.collapsed && childIds(id).length > 0 ? ["collapsed:: true"] : []),
-          ...((b.ref_count ?? 0) > 0 ? [`id:: ${b.id}`] : []),
+          ...(allIds || (b.ref_count ?? 0) > 0 ? [`id:: ${b.id}`] : []),
         ];
       },
     },

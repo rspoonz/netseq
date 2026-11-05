@@ -1,0 +1,168 @@
+import type { Database } from "bun:sqlite";
+import { afterEach, beforeEach, describe, expect, test } from "bun:test";
+import type { Op } from "../shared/types";
+import { AGENT_WRITER, AgentError, appendBlocks, editBlock, pageOutline } from "./agent";
+import { applyBatch } from "./apply";
+import { openDb } from "./db";
+import { getHistory } from "./read";
+import { blockOp, checkTree, outlineOf, writer } from "./testing";
+
+let db: Database;
+
+beforeEach(() => {
+  db = openDb(":memory:");
+});
+
+afterEach(() => {
+  checkTree(db);
+  db.close();
+});
+
+function apply(...ops: Op[]) {
+  return applyBatch(db, { ...writer, ops });
+}
+
+function refused(run: () => unknown): AgentError {
+  try {
+    run();
+  } catch (e) {
+    if (e instanceof AgentError) return e;
+    throw e;
+  }
+  throw new Error("expected the request to be refused");
+}
+
+describe("reading a page", () => {
+  test("is a markdown outline with every block's id", () => {
+    apply(
+      blockOp("a", "Project", null, "a0", { content: "Plan" }),
+      blockOp("b", "Project", "a", "a0", { content: "TODO step\nSCHEDULED: <2026-11-06 Fri>" }),
+    );
+    expect(pageOutline(db, "project")).toBe(
+      "- Plan\n  id:: a\n\t- TODO step\n\t  id:: b\n\t  SCHEDULED: <2026-11-06 Fri>",
+    );
+  });
+
+  test("is null for a page that doesn't exist", () => {
+    expect(pageOutline(db, "Nowhere")).toBeNull();
+  });
+});
+
+describe("appending", () => {
+  test("adds a block at the end of a page's top level", () => {
+    apply(blockOp("a", "Project", null, "a0", { content: "first" }), blockOp("b", "Project", "a", "a0", { content: "child" }));
+    const { page, ids } = appendBlocks(db, { page: "PROJECT", text: "TODO last" });
+    expect(page).toBe("Project");
+    expect(ids).toHaveLength(1);
+    expect(outlineOf(db, "project")).toBe("first\n  child\nTODO last");
+    const row = db.query("SELECT marker, writer, device FROM blocks WHERE id = ?").get(ids[0]);
+    expect(row).toEqual({ marker: "TODO", writer: AGENT_WRITER, device: "Agent" });
+  });
+
+  test("creates the page, links and journal day it needs", () => {
+    const { page, result } = appendBlocks(db, { page: " 2026-11-05 ", text: "Met [[Alice]]" });
+    expect(page).toBe("2026-11-05");
+    expect(result.pages.map((p) => [p.name, p.journal_day])).toEqual([
+      ["2026-11-05", 20261105],
+      ["Alice", null],
+    ]);
+  });
+
+  test("text that starts with a bullet is an outline; other text is one block", () => {
+    const outline = appendBlocks(db, { page: "P", text: "- one\n  - two\n    more\n- three" });
+    expect(outline.ids).toHaveLength(3);
+    appendBlocks(db, { page: "P", text: "plain\nsecond line\n" });
+    expect(outlineOf(db, "p")).toBe("one\n  two\nmore\nthree\nplain\nsecond line");
+  });
+
+  test("under a parent, goes after its last child on the parent's page", () => {
+    apply(blockOp("a", "Project", null, "a0", { content: "parent" }), blockOp("b", "Project", "a", "a0", { content: "old child" }));
+    const { page } = appendBlocks(db, { parent: "a", text: "- new child\n  - grandchild" });
+    expect(page).toBe("Project");
+    expect(outlineOf(db, "project")).toBe("parent\n  old child\n  new child\n    grandchild");
+  });
+
+  test("drops id:: and collapsed:: lines copied from a page outline", () => {
+    appendBlocks(db, { page: "P", text: "- copied\n  id:: 1234\n  collapsed:: true\n  status:: kept" });
+    expect(outlineOf(db, "p")).toBe("copied\nstatus:: kept");
+  });
+
+  test("an agent that gives its name is shown by it", () => {
+    const { ids } = appendBlocks(db, { page: "P", text: "hello", agent: " Claude " });
+    appendBlocks(db, { page: "P", text: "hi", agent: "" });
+    const devices = db.query("SELECT device FROM blocks ORDER BY order_key").all();
+    expect(devices).toEqual([{ device: "Claude (agent)" }, { device: "Agent" }]);
+    editBlock(db, { id: ids[0], content: "hello again", agent: "Codex" });
+    expect(getHistory(db, ids[0]).map((h) => h.device)).toEqual(["Claude (agent)"]);
+    expect(refused(() => appendBlocks(db, { page: "P", text: "x", agent: 1 })).message).toBe("agent must be a name");
+  });
+
+  test("refuses requests it can't follow", () => {
+    apply(blockOp("a", "Project", null, "a0"));
+    expect(refused(() => appendBlocks(db, { text: "x" })).message).toBe("give either page or parent");
+    expect(refused(() => appendBlocks(db, { page: "P", parent: "a", text: "x" })).message).toBe("give either page or parent");
+    expect(refused(() => appendBlocks(db, { page: "P", text: "  " })).status).toBe(400);
+    expect(refused(() => appendBlocks(db, { page: "a]]b", text: "x" })).status).toBe(400);
+    expect(refused(() => appendBlocks(db, { page: 7, text: "x" })).status).toBe(400);
+    expect(refused(() => appendBlocks(db, { parent: "missing", text: "x" }))).toMatchObject({ message: "no such block", status: 404 });
+    expect(refused(() => appendBlocks(db, null)).status).toBe(400);
+    expect(outlineOf(db, "project")).toBe("a");
+  });
+});
+
+describe("editing", () => {
+  test("replaces a block's text, keeps its place and children, and keeps the old text in history", () => {
+    apply(
+      blockOp("a", "Project", null, "a0", { content: "TODO step", collapsed: true }),
+      blockOp("b", "Project", "a", "a0", { content: "child" }),
+    );
+    const { id, page } = editBlock(db, { id: "a", content: "DONE step\nid:: a" }, 1000);
+    expect([id, page]).toEqual(["a", "Project"]);
+    expect(outlineOf(db, "project")).toBe("DONE step\n  child");
+    const row = db.query("SELECT marker, collapsed, device FROM blocks WHERE id = 'a'").get();
+    expect(row).toEqual({ marker: "DONE", collapsed: 1, device: "Agent" });
+    expect(getHistory(db, "a")).toEqual([{ content: "TODO step", device: "Test", saved_at: 1000 }]);
+  });
+
+  test("with the text the agent read, only edits a block that still says it", () => {
+    apply(
+      blockOp("a", "Project", null, "a0", { content: "parent" }),
+      blockOp("b", "Project", "a", "a0", { content: "TODO step\nSCHEDULED: <2026-11-06 Fri>" }),
+    );
+    // Copied from the page outline, with its indentation and id line.
+    const read = "TODO step\n\t  id:: b\n\t  SCHEDULED: <2026-11-06 Fri>";
+    editBlock(db, { id: "b", content: "DONE step\nSCHEDULED: <2026-11-06 Fri>", expect: read });
+    expect(outlineOf(db, "project")).toBe("parent\n  DONE step\nSCHEDULED: <2026-11-06 Fri>");
+
+    // Someone changed it since: nothing is written, and the agent is told what it says now.
+    expect(refused(() => editBlock(db, { id: "b", content: "CANCELED step", expect: read }))).toMatchObject({
+      message: "the block has changed since you read it",
+      status: 409,
+      details: { content: "DONE step\nSCHEDULED: <2026-11-06 Fri>" },
+    });
+    expect(getHistory(db, "b")).toHaveLength(1);
+    expect(refused(() => editBlock(db, { id: "b", content: "x", expect: 3 })).status).toBe(400);
+  });
+
+  test("the same text again saves nothing, so the block stays as it was", () => {
+    apply(blockOp("a", "Project", null, "a0", { content: "my own words  " }));
+    const before = db.query("SELECT rev, writer, device, updated_at FROM blocks WHERE id = 'a'").get();
+    const { result, page } = editBlock(db, { id: "a", content: "my own words", agent: "Claude" });
+    expect([result, page]).toEqual([null, "Project"]);
+    expect(db.query("SELECT rev, writer, device, updated_at FROM blocks WHERE id = 'a'").get()).toEqual(before);
+    expect(getHistory(db, "a")).toEqual([]);
+  });
+
+  test("re-indexes links, and removes pages nothing links to any more", () => {
+    apply(blockOp("a", "Project", null, "a0", { content: "see [[Old]]" }));
+    const { result } = editBlock(db, { id: "a", content: "see [[New]]" });
+    expect(result?.pages.map((p) => p.name)).toEqual(["New"]);
+    expect(result?.removedPages).toEqual(["old"]);
+  });
+
+  test("refuses requests it can't follow", () => {
+    expect(refused(() => editBlock(db, { id: "missing", content: "x" }))).toMatchObject({ message: "no such block", status: 404 });
+    expect(refused(() => editBlock(db, { id: "a" })).status).toBe(400);
+    expect(refused(() => editBlock(db, [])).status).toBe(400);
+  });
+});

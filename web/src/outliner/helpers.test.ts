@@ -1,7 +1,8 @@
 import { describe, expect, test } from "bun:test";
 import { keysBetween } from "../../../shared/order";
 import { applyCompletion, matchPages, refQueryAt } from "./autocomplete";
-import { insertOutline, looksLikeOutline, parseOutline, toMarkdown } from "./clipboard";
+import { looksLikeOutline, parseOutline } from "../../../shared/markdownOutline";
+import { insertOutline, toMarkdown } from "./clipboard";
 import { rawOffset } from "./intents";
 import { Outline, topKey } from "./outline";
 

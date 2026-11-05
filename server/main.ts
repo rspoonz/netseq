@@ -1,6 +1,7 @@
 import type { Database } from "bun:sqlite";
 import { stat } from "node:fs/promises";
 import { join, resolve, sep } from "node:path";
+import { AgentError, appendBlocks, editBlock, pageOutline } from "./agent";
 import { applyBatch, BadBatch, parseBatch, pruneHistory, renamePage } from "./apply";
 import { dailyBackup } from "./backup";
 import { openDb, schemaVersion } from "./db";
@@ -77,9 +78,13 @@ function backUpToday(db: Database, dir: string): void {
   }
 }
 
+const AGENT_GUIDE = join(import.meta.dir, "agents.md");
+
 async function route(req: Request, url: URL, db: Database, hub: EventHub, distDir: string): Promise<Response> {
   if (url.pathname.startsWith("/api/")) return api(req, url, db, hub);
   if (req.method !== "GET" && req.method !== "HEAD") return new Response("Method not allowed", { status: 405 });
+  // What NetSeq is and how to use its API, for AI agents.
+  if (url.pathname === "/agents") return markdown(Bun.file(AGENT_GUIDE));
   return serveStatic(url.pathname, distDir);
 }
 
@@ -159,6 +164,24 @@ async function api(req: Request, url: URL, db: Database, hub: EventHub): Promise
       const limit = Math.min(50, Math.max(1, Number(params.get("limit")) || 5));
       return Response.json(getJournals(db, before, limit));
     }
+    case "GET /api/agent/page": {
+      const name = params.get("name");
+      if (!name?.trim()) return badRequest("name is required");
+      const outline = pageOutline(db, name);
+      return outline === null ? Response.json({ error: "no such page" }, { status: 404 }) : markdown(outline);
+    }
+    case "POST /api/agent/append":
+    case "POST /api/agent/edit": {
+      const body = await req.json().catch(() => null);
+      try {
+        const { result, ...reply } = url.pathname.endsWith("/append") ? appendBlocks(db, body) : editBlock(db, body);
+        if (result) hub.publish("change", result);
+        return Response.json(reply);
+      } catch (e) {
+        if (e instanceof AgentError) return Response.json({ error: e.message, ...e.details }, { status: e.status });
+        throw e;
+      }
+    }
     case "POST /api/batch": {
       let body: unknown;
       try {
@@ -183,6 +206,10 @@ async function api(req: Request, url: URL, db: Database, hub: EventHub): Promise
 function today(params: URLSearchParams): number {
   const day = params.get("today") ?? "";
   return /^\d{8}$/.test(day) ? Number(day) : dayNumber(journalName(new Date()));
+}
+
+function markdown(body: string | Blob): Response {
+  return new Response(body, { headers: { "Content-Type": "text/markdown; charset=utf-8", "Cache-Control": "no-cache" } });
 }
 
 function badRequest(error: string): Response {

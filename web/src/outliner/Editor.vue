@@ -8,7 +8,8 @@ import { editing, isPlacingCaret, outline, pages, startEditing, stopEditing } fr
 import { clearActiveEditor, setActiveEditor } from "./active";
 import { applyCompletion, matchPages, type RefQuery, refQueryAt } from "./autocomplete";
 import { caretCoordinates, caretLine } from "./caret";
-import { insertOutline, looksLikeOutline, parseOutline } from "./clipboard";
+import { looksLikeOutline, parseOutline } from "../../../shared/markdownOutline";
+import { insertOutline } from "./clipboard";
 import * as intents from "./intents";
 import { type Command, keyCommand } from "./keymap";
 import { topKey } from "./outline";

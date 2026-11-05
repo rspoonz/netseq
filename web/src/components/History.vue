@@ -7,8 +7,8 @@ import { setContent } from "../outliner/intents";
 import { commit } from "../outliner/undo";
 import { outline } from "../store";
 
-// Earlier versions of one block: text that another tab or device replaced. Restoring one is an
-// ordinary (undoable) edit.
+// Earlier versions of one block: text that another tab, device or an agent replaced. Restoring
+// one is an ordinary (undoable) edit.
 
 const entries = ref<HistoryEntry[] | null>(null);
 const failed = ref(false);
@@ -42,7 +42,7 @@ function restore(entry: HistoryEntry): void {
       <h2>Earlier versions</h2>
       <button type="button" @click="historyFor = null">Close</button>
     </div>
-    <p class="muted history-about">Text another tab or device replaced. Kept for 30 days.</p>
+    <p class="muted history-about">Text another tab, device or an agent replaced. Kept for 30 days.</p>
     <p v-if="current" class="history-now">
       <span class="muted">Now</span>
       <span class="history-text">{{ current.content }}</span>
