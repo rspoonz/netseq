@@ -66,4 +66,4 @@ bun run bench                      # speed on a generated 100k-block graph (abou
 
 ## Licence
 
-No licence has been chosen yet, so for now the code is published to read, not to reuse.
+MIT, see [LICENSE](LICENSE).
