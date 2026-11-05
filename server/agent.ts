@@ -44,55 +44,84 @@ export function pageOutline(db: Database, name: string): string | null {
   return page ? pageMarkdown(blocks, { allIds: true }) : null;
 }
 
-export interface Appended {
+export interface Added {
   result: BatchResult;
   page: string; // the page's name
   ids: string[]; // the new blocks, in outline order
 }
 
+const POSITIONS = ["page", "parent", "after", "before"] as const;
+
 /**
- * Adds blocks at the end of a page's top level, or as the last children of a block. `text` is
- * either one block's text, or a markdown outline ("- a\n  - b") when it starts with a bullet.
+ * Adds blocks at one of four places: the end of a page's top level (`page`), the end of a block's
+ * children (`parent`), or right after or before a block, as its siblings (`after`, `before`).
+ * `text` is either one block's text, or a markdown outline ("- a\n  - b") when it starts with a
+ * bullet.
  */
-export function appendBlocks(db: Database, body: unknown, now = Date.now()): Appended {
+export function addBlocks(db: Database, body: unknown, now = Date.now()): Added {
   if (!isRecord(body)) throw new AgentError("expected a JSON object");
-  const { page, parent, text } = body;
+  const given = POSITIONS.filter((key) => body[key] !== undefined);
+  if (given.length !== 1) throw new AgentError("give one of page, parent, after or before");
+  const [position] = given;
+  const where = body[position];
+  if (typeof where !== "string") throw new AgentError(`${position} must be a ${position === "page" ? "page name" : "block id"}`);
+  const { text } = body;
   const who = agentWriter(body.agent);
-  if ((page === undefined) === (parent === undefined)) throw new AgentError("give either page or parent");
   if (typeof text !== "string" || !text.trim()) throw new AgentError("text must be a non-empty string");
   const items = /^\s*[-*+] /.test(text) ? parseOutline(text) : [{ content: text.trim(), children: [] }];
 
-  return db.transaction((): Appended => {
+  return db.transaction((): Added => {
     let pageName: string;
     let parentId: string | null = null;
-    if (typeof parent === "string") {
-      const row = db.query("SELECT p.name FROM blocks b JOIN pages p ON p.key = b.page WHERE b.id = ?").get(parent) as {
-        name: string;
-      } | null;
-      if (!row) throw new AgentError("no such block", 404);
-      [pageName, parentId] = [row.name, parent];
-    } else if (typeof page === "string") {
-      const problem = pageNameProblem(page);
+    let lo: string | null; // the new blocks go between these sibling keys (null: the start or end)
+    let hi: string | null = null;
+    const lastKey = (under: string | null) =>
+      (
+        db.query("SELECT max(order_key) AS key FROM blocks WHERE page = ? AND parent IS ?").get(pageKey(pageName), under) as {
+          key: string | null;
+        }
+      ).key;
+
+    if (position === "page") {
+      const problem = pageNameProblem(where);
       if (problem) throw new AgentError(problem);
-      pageName = pageSummary(db, pageKey(page))?.name ?? page.trim();
+      pageName = pageSummary(db, pageKey(where))?.name ?? where.trim();
+      lo = lastKey(null);
     } else {
-      throw new AgentError("page and parent must be strings");
+      const block = db
+        .query("SELECT b.page, b.parent, b.order_key, p.name FROM blocks b JOIN pages p ON p.key = b.page WHERE b.id = ?")
+        .get(where) as { page: string; parent: string | null; order_key: string; name: string } | null;
+      if (!block) throw new AgentError("no such block", 404);
+      pageName = block.name;
+      if (position === "parent") {
+        parentId = where;
+        lo = lastKey(where);
+      } else {
+        // The block's neighbour on the other side, in the siblings' (order_key, id) order.
+        parentId = block.parent;
+        const after = position === "after";
+        const neighbour = db
+          .query(
+            after
+              ? "SELECT order_key FROM blocks WHERE page = ?1 AND parent IS ?2 AND (order_key > ?3 OR (order_key = ?3 AND id > ?4)) ORDER BY order_key, id LIMIT 1"
+              : "SELECT order_key FROM blocks WHERE page = ?1 AND parent IS ?2 AND (order_key < ?3 OR (order_key = ?3 AND id < ?4)) ORDER BY order_key DESC, id DESC LIMIT 1",
+          )
+          .get(block.page, block.parent, block.order_key, where) as { order_key: string } | null;
+        const other = neighbour?.order_key ?? null;
+        [lo, hi] = after ? [block.order_key, other] : [other, block.order_key];
+      }
     }
 
-    const last = db
-      .query("SELECT max(order_key) AS key FROM blocks WHERE page = ? AND parent IS ?")
-      .get(pageKey(pageName), parentId) as { key: string | null };
     const ops: Op[] = [];
-    const add = (list: OutlineItem[], under: string | null, after: string | null) => {
-      const keys = keysBetween(after, null, list.length);
+    const add = (list: OutlineItem[], under: string | null, keys: string[]) => {
       list.forEach((item, i) => {
         const id = crypto.randomUUID();
         const content = withoutOutlineLines(item.content);
         ops.push({ t: "block", id, page: pageName, parent: under, order_key: keys[i], content, collapsed: false, base: 0 });
-        add(item.children, id, null);
+        add(item.children, id, keysBetween(null, null, item.children.length));
       });
     };
-    add(items, parentId, last.key);
+    add(items, parentId, keysBetween(lo, hi, items.length));
 
     const result = applyBatch(db, { ...who, ops }, now);
     return { result, page: pageSummary(db, pageKey(pageName))!.name, ids: ops.map((op) => op.id) };

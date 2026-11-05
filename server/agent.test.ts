@@ -1,7 +1,7 @@
 import type { Database } from "bun:sqlite";
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import type { Op } from "../shared/types";
-import { AGENT_WRITER, AgentError, appendBlocks, editBlock, pageOutline } from "./agent";
+import { AGENT_WRITER, AgentError, addBlocks, editBlock, pageOutline } from "./agent";
 import { applyBatch } from "./apply";
 import { openDb } from "./db";
 import { getHistory } from "./read";
@@ -48,10 +48,10 @@ describe("reading a page", () => {
   });
 });
 
-describe("appending", () => {
+describe("adding", () => {
   test("adds a block at the end of a page's top level", () => {
     apply(blockOp("a", "Project", null, "a0", { content: "first" }), blockOp("b", "Project", "a", "a0", { content: "child" }));
-    const { page, ids } = appendBlocks(db, { page: "PROJECT", text: "TODO last" });
+    const { page, ids } = addBlocks(db, { page: "PROJECT", text: "TODO last" });
     expect(page).toBe("Project");
     expect(ids).toHaveLength(1);
     expect(outlineOf(db, "project")).toBe("first\n  child\nTODO last");
@@ -60,7 +60,7 @@ describe("appending", () => {
   });
 
   test("creates the page, links and journal day it needs", () => {
-    const { page, result } = appendBlocks(db, { page: " 2026-11-05 ", text: "Met [[Alice]]" });
+    const { page, result } = addBlocks(db, { page: " 2026-11-05 ", text: "Met [[Alice]]" });
     expect(page).toBe("2026-11-05");
     expect(result.pages.map((p) => [p.name, p.journal_day])).toEqual([
       ["2026-11-05", 20261105],
@@ -69,44 +69,86 @@ describe("appending", () => {
   });
 
   test("text that starts with a bullet is an outline; other text is one block", () => {
-    const outline = appendBlocks(db, { page: "P", text: "- one\n  - two\n    more\n- three" });
+    const outline = addBlocks(db, { page: "P", text: "- one\n  - two\n    more\n- three" });
     expect(outline.ids).toHaveLength(3);
-    appendBlocks(db, { page: "P", text: "plain\nsecond line\n" });
+    addBlocks(db, { page: "P", text: "plain\nsecond line\n" });
     expect(outlineOf(db, "p")).toBe("one\n  two\nmore\nthree\nplain\nsecond line");
   });
 
   test("under a parent, goes after its last child on the parent's page", () => {
     apply(blockOp("a", "Project", null, "a0", { content: "parent" }), blockOp("b", "Project", "a", "a0", { content: "old child" }));
-    const { page } = appendBlocks(db, { parent: "a", text: "- new child\n  - grandchild" });
+    const { page } = addBlocks(db, { parent: "a", text: "- new child\n  - grandchild" });
     expect(page).toBe("Project");
     expect(outlineOf(db, "project")).toBe("parent\n  old child\n  new child\n    grandchild");
   });
 
   test("drops id:: and collapsed:: lines copied from a page outline", () => {
-    appendBlocks(db, { page: "P", text: "- copied\n  id:: 1234\n  collapsed:: true\n  status:: kept" });
+    addBlocks(db, { page: "P", text: "- copied\n  id:: 1234\n  collapsed:: true\n  status:: kept" });
     expect(outlineOf(db, "p")).toBe("copied\nstatus:: kept");
   });
 
   test("an agent that gives its name is shown by it", () => {
-    const { ids } = appendBlocks(db, { page: "P", text: "hello", agent: " Claude " });
-    appendBlocks(db, { page: "P", text: "hi", agent: "" });
+    const { ids } = addBlocks(db, { page: "P", text: "hello", agent: " Claude " });
+    addBlocks(db, { page: "P", text: "hi", agent: "" });
     const devices = db.query("SELECT device FROM blocks ORDER BY order_key").all();
     expect(devices).toEqual([{ device: "Claude (agent)" }, { device: "Agent" }]);
     editBlock(db, { id: ids[0], content: "hello again", agent: "Codex" });
     expect(getHistory(db, ids[0]).map((h) => h.device)).toEqual(["Claude (agent)"]);
-    expect(refused(() => appendBlocks(db, { page: "P", text: "x", agent: 1 })).message).toBe("agent must be a name");
+    expect(refused(() => addBlocks(db, { page: "P", text: "x", agent: 1 })).message).toBe("agent must be a name");
   });
 
   test("refuses requests it can't follow", () => {
     apply(blockOp("a", "Project", null, "a0"));
-    expect(refused(() => appendBlocks(db, { text: "x" })).message).toBe("give either page or parent");
-    expect(refused(() => appendBlocks(db, { page: "P", parent: "a", text: "x" })).message).toBe("give either page or parent");
-    expect(refused(() => appendBlocks(db, { page: "P", text: "  " })).status).toBe(400);
-    expect(refused(() => appendBlocks(db, { page: "a]]b", text: "x" })).status).toBe(400);
-    expect(refused(() => appendBlocks(db, { page: 7, text: "x" })).status).toBe(400);
-    expect(refused(() => appendBlocks(db, { parent: "missing", text: "x" }))).toMatchObject({ message: "no such block", status: 404 });
-    expect(refused(() => appendBlocks(db, null)).status).toBe(400);
+    expect(refused(() => addBlocks(db, { text: "x" })).message).toBe("give one of page, parent, after or before");
+    expect(refused(() => addBlocks(db, { page: "P", parent: "a", text: "x" })).message).toBe("give one of page, parent, after or before");
+    expect(refused(() => addBlocks(db, { page: "P", text: "  " })).status).toBe(400);
+    expect(refused(() => addBlocks(db, { page: "a]]b", text: "x" })).status).toBe(400);
+    expect(refused(() => addBlocks(db, { page: 7, text: "x" })).status).toBe(400);
+    expect(refused(() => addBlocks(db, { parent: "missing", text: "x" }))).toMatchObject({ message: "no such block", status: 404 });
+    expect(refused(() => addBlocks(db, { after: "a", before: "a", text: "x" })).status).toBe(400);
+    expect(refused(() => addBlocks(db, { after: "missing", text: "x" }))).toMatchObject({ message: "no such block", status: 404 });
+    expect(refused(() => addBlocks(db, { before: 7, text: "x" })).message).toBe("before must be a block id");
+    expect(refused(() => addBlocks(db, null)).status).toBe(400);
     expect(outlineOf(db, "project")).toBe("a");
+  });
+});
+
+describe("adding next to a block", () => {
+  beforeEach(() => {
+    apply(
+      blockOp("a", "Project", null, "a0"),
+      blockOp("b", "Project", null, "a1"),
+      blockOp("b1", "Project", "b", "a0"),
+      blockOp("b2", "Project", "b", "a1"),
+      blockOp("c", "Project", null, "a2"),
+    );
+  });
+
+  test("after a block, goes between it and the next one", () => {
+    const { page } = addBlocks(db, { after: "a", text: "new" });
+    expect(page).toBe("Project");
+    expect(outlineOf(db, "project")).toBe("a\nnew\nb\n  b1\n  b2\nc");
+  });
+
+  test("after the last block, goes at the end", () => {
+    addBlocks(db, { after: "c", text: "new" });
+    expect(outlineOf(db, "project")).toBe("a\nb\n  b1\n  b2\nc\nnew");
+  });
+
+  test("before a block, goes between it and the one before", () => {
+    addBlocks(db, { before: "c", text: "new" });
+    expect(outlineOf(db, "project")).toBe("a\nb\n  b1\n  b2\nnew\nc");
+  });
+
+  test("before the first block, goes at the top", () => {
+    addBlocks(db, { before: "a", text: "new" });
+    expect(outlineOf(db, "project")).toBe("new\na\nb\n  b1\n  b2\nc");
+  });
+
+  test("next to a nested block, stays under its parent, with an outline's children", () => {
+    addBlocks(db, { after: "b1", text: "- one\n  - under one\n- two" });
+    addBlocks(db, { before: "b1", text: "zero" });
+    expect(outlineOf(db, "project")).toBe("a\nb\n  zero\n  b1\n  one\n    under one\n  two\n  b2\nc");
   });
 });
 
