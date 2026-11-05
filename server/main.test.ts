@@ -175,13 +175,13 @@ test("/agents serves the agent guide as markdown, and every endpoint it lists ex
   }
 });
 
-test("agents append and edit blocks over HTTP; open tabs hear of it", async () => {
+test("agents add and edit blocks over HTTP; open tabs hear of it", async () => {
   const controller = new AbortController();
   const events = (await fetch(`${base}/api/events`, { signal: controller.signal })).body!.getReader();
   const post = (path: string, body: unknown) =>
     fetch(`${base}/api/agent/${path}`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body) });
 
-  const appended = await post("append", { page: "Agent Notes", text: "- TODO first\n  - detail" });
+  const appended = await post("add", { page: "Agent Notes", text: "- TODO first\n  - detail" });
   const { page, ids } = (await appended.json()) as { page: string; ids: string[] };
   expect(page).toBe("Agent Notes");
   let text = "";
@@ -189,8 +189,11 @@ test("agents append and edit blocks over HTTP; open tabs hear of it", async () =
   controller.abort();
 
   expect((await post("edit", { id: ids[0], content: "DONE first" })).status).toBe(200);
+  const inserted = (await (await post("add", { before: ids[1], text: "summary" })).json()) as { ids: string[] };
   const outline = await (await fetch(`${base}/api/agent/page?name=agent%20notes`)).text();
-  expect(outline).toBe(`- DONE first\n  id:: ${ids[0]}\n\t- detail\n\t  id:: ${ids[1]}`);
+  expect(outline).toBe(
+    `- DONE first\n  id:: ${ids[0]}\n\t- summary\n\t  id:: ${inserted.ids[0]}\n\t- detail\n\t  id:: ${ids[1]}`,
+  );
   const history = (await (await fetch(`${base}/api/blocks/${ids[0]}/history`)).json()) as HistoryEntry[];
   expect(history.map((h) => [h.content, h.device])).toEqual([["TODO first", "Agent"]]);
 
@@ -198,7 +201,7 @@ test("agents append and edit blocks over HTTP; open tabs hear of it", async () =
   expect(await (await post("edit", { id: "missing", content: "x" })).json()).toEqual({ error: "no such block" });
   const stale = await post("edit", { id: ids[0], content: "x", expect: "TODO first" });
   expect([stale.status, await stale.json()]).toEqual([409, { error: "the block has changed since you read it", content: "DONE first" }]);
-  expect((await post("append", "not an object")).status).toBe(400);
+  expect((await post("add", "not an object")).status).toBe(400);
 });
 
 test("the web app's page points agents to /agents", async () => {

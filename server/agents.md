@@ -56,21 +56,28 @@ For example `(and [[Project X]] (task TODO DOING))`. To find blocks about a topi
 
 Send JSON with `Content-Type: application/json` (anything else gets a 415). Changes show up straight away in any open NetSeq tab. Errors come back as `{"error": "…"}` with status 400, or 404 for a page or block that doesn't exist.
 
-Add `"agent": "<your name>"` (e.g. `"Claude"`) to append and edit requests. The owner then sees your changes as "Claude (agent)" in a block's history; without it, they show as "Agent".
+Add `"agent": "<your name>"` (e.g. `"Claude"`) to add and edit requests. The owner then sees your changes as "Claude (agent)" in a block's history; without it, they show as "Agent".
 
-`POST /api/agent/append`: adds blocks at the end of a page, or as the last blocks under a block. Give `page` (a page name) or `parent` (a block id), and `text`:
+`POST /api/agent/add`: adds blocks. Give `text` and exactly one of these to say where they go:
+
+| Give | The new blocks go |
+|---|---|
+| `page` (a page name) | at the end of the page, which is created if needed |
+| `parent` (a block id) | at the end of the blocks under that block |
+| `after` (a block id) | right after that block, under the same parent |
+| `before` (a block id) | right before that block, under the same parent |
 
 ```json
 { "page": "2026-11-05", "text": "TODO Book the dentist", "agent": "Claude" }
 ```
 
-or, under a block:
+or, after a block:
 
 ```json
-{ "parent": "6f1c2a7e-0b1d-4c55-9a43-2f7d1c9e8b10", "text": "- Agreed on the budget\n  - [[Bob]] checks the numbers\n- TODO Send the minutes", "agent": "Claude" }
+{ "after": "6f1c2a7e-0b1d-4c55-9a43-2f7d1c9e8b10", "text": "- Agreed on the budget\n  - [[Bob]] checks the numbers\n- TODO Send the minutes", "agent": "Claude" }
 ```
 
-`text` is one block's text, which may have several lines. If it starts with `- `, it's an outline instead, and each bullet becomes a block. The page is created if needed. The answer is the page's name and the new blocks' ids, in outline order: `{"page": "2026-11-05", "ids": ["…"]}`.
+`text` is one block's text, which may have several lines. If it starts with `- `, it's an outline instead, and each bullet becomes a block. The answer is the page's name and the new blocks' ids, in outline order: `{"page": "2026-11-05", "ids": ["…"]}`.
 
 `POST /api/agent/edit`: replaces one block's text. Blocks under it stay. Send `expect`, the block's text as you read it, so the edit can't replace something the owner wrote since:
 

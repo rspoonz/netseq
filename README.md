@@ -35,7 +35,7 @@ For example `{{query (and [[Project]] (task TODO DOING))}}`. Results show at mos
 
 ## AI agents
 
-`/agents` explains NetSeq and its API to AI agents. Give an agent NetSeq's address (the page there points it to the guide), or `http://localhost:8080/agents` itself, and ask it to look something up or add to your notes. Agents read pages as markdown outlines, add blocks with `/api/agent/append` and change a block's text with `/api/agent/edit`. They can't delete anything, and an agent's edit keeps the text it replaced in the block's history. The guide is [server/agents.md](server/agents.md).
+`/agents` explains NetSeq and its API to AI agents. Give an agent NetSeq's address (the page there points it to the guide), or `http://localhost:8080/agents` itself, and ask it to look something up or add to your notes. Agents read pages as markdown outlines, add blocks with `/api/agent/add` and change a block's text with `/api/agent/edit`. They can't delete anything, and an agent's edit keeps the text it replaced in the block's history. The guide is [server/agents.md](server/agents.md).
 
 ## Run it
 
