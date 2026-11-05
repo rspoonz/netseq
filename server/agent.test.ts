@@ -97,11 +97,25 @@ describe("adding", () => {
     expect(refused(() => addBlocks(db, { page: "P", text: "x", agent: 1 })).message).toBe("agent must be a name");
   });
 
+  test("fields sent as null count as left out", () => {
+    apply(blockOp("a", "Project", null, "a0"));
+    const { ids } = addBlocks(db, { page: null, parent: null, after: "a", before: null, text: "x", agent: null });
+    expect(outlineOf(db, "project")).toBe("a\nx");
+    expect(db.query("SELECT device FROM blocks WHERE id = ?").get(ids[0])).toEqual({ device: "Agent" });
+    moveBlock(db, { id: ids[0], page: null, before: "a", indent: null, outdent: null });
+    expect(outlineOf(db, "project")).toBe("x\na");
+    editBlock(db, { id: ids[0], content: "y", expect: null });
+    expect(outlineOf(db, "project")).toBe("y\na");
+  });
+
   test("refuses requests it can't follow", () => {
     apply(blockOp("a", "Project", null, "a0"));
     expect(refused(() => addBlocks(db, { text: "x" })).message).toBe("give one of page, parent, after or before");
     expect(refused(() => addBlocks(db, { page: "P", parent: "a", text: "x" })).message).toBe("give one of page, parent, after or before");
     expect(refused(() => addBlocks(db, { page: "P", text: "  " })).status).toBe(400);
+    for (const text of ["- ", "- one\n- ", "- one\n  - ", "id:: 123", "- id:: 1\n- collapsed:: true"]) {
+      expect(refused(() => addBlocks(db, { page: "P", text })).message).toBe("every block needs some text");
+    }
     expect(refused(() => addBlocks(db, { page: "a]]b", text: "x" })).status).toBe(400);
     expect(refused(() => addBlocks(db, { page: 7, text: "x" })).status).toBe(400);
     expect(refused(() => addBlocks(db, { parent: "missing", text: "x" }))).toMatchObject({ message: "no such block", status: 404 });
@@ -190,9 +204,11 @@ describe("moving", () => {
     expect(moveBlock(db, { id: "b2", indent: true, agent: "Claude" })).toMatchObject({ page: "Project" });
     expect(outlineOf(db, "project")).toBe("a\nb\n  b1\n    b1x\n    b2\n  b3\nc");
     expect(collapsed("b1")).toBe(0); // opened, so the moved block stays in view
-    const row = db.query("SELECT content, device FROM blocks WHERE id = 'b2'").get();
-    expect(row).toEqual({ content: "b2", device: "Claude (agent)" });
+    // Moving changed no text, so the text is still the owner's, as history shows once it's replaced.
+    expect(db.query("SELECT content, device FROM blocks WHERE id = 'b2'").get()).toEqual({ content: "b2", device: "Test" });
     expect(getHistory(db, "b2")).toEqual([]);
+    editBlock(db, { id: "b2", content: "new", agent: "Claude" });
+    expect(getHistory(db, "b2").map((h) => [h.content, h.device])).toEqual([["b2", "Test"]]);
   });
 
   test("can't indent the first block at its level", () => {

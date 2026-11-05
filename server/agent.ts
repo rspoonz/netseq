@@ -33,7 +33,7 @@ export const AGENT_WRITER = "agent";
  * that gave its name, or just "Agent".
  */
 function agentWriter(name: unknown): Pick<Batch, "writer" | "device"> {
-  if (name !== undefined && typeof name !== "string") throw new AgentError("agent must be a name");
+  if (name != null && typeof name !== "string") throw new AgentError("agent must be a name");
   const label = name?.trim().slice(0, 50);
   return { writer: AGENT_WRITER, device: label ? `${label} (agent)` : "Agent" };
 }
@@ -115,7 +115,7 @@ function place(db: Database, position: Position, where: string): Place {
 
 /** The one key from `allowed` that the request gives, and its value. */
 function onePosition<P extends string>(body: Record<string, unknown>, allowed: readonly P[]): [P, unknown] {
-  const given = allowed.filter((key) => body[key] !== undefined);
+  const given = allowed.filter((key) => body[key] != null); // null counts as left out, like undefined
   if (given.length !== 1) throw new AgentError(`give one of ${allowed.slice(0, -1).join(", ")} or ${allowed.at(-1)}`);
   return [given[0], body[given[0]]];
 }
@@ -144,6 +144,7 @@ export function addBlocks(db: Database, body: unknown, now = Date.now()): Added 
   const who = agentWriter(body.agent);
   if (typeof text !== "string" || !text.trim()) throw new AgentError("text must be a non-empty string");
   const items = /^\s*[-*+] /.test(text) ? parseOutline(text) : [{ content: text.trim(), children: [] }];
+  if (hasEmptyBlock(items)) throw new AgentError("every block needs some text");
 
   return db.transaction((): Added => {
     const to = place(db, position, where);
@@ -242,7 +243,7 @@ export function editBlock(db: Database, body: unknown, now = Date.now()): Edited
   const who = agentWriter(body.agent);
   if (typeof id !== "string") throw new AgentError("id must be a block id");
   if (typeof content !== "string") throw new AgentError("content must be a string");
-  if (expect !== undefined && typeof expect !== "string") throw new AgentError("expect must be the block's text");
+  if (expect != null && typeof expect !== "string") throw new AgentError("expect must be the block's text");
   const text = withoutOutlineLines(content);
 
   return db.transaction((): Edited => {
@@ -271,6 +272,11 @@ function withoutOutlineLines(content: string): string {
     .filter((line) => !/^\s*(id|collapsed):: /.test(line))
     .join("\n")
     .trimEnd();
+}
+
+// Whether any block in an outline would have no text once the outline's own lines are taken out.
+function hasEmptyBlock(items: OutlineItem[]): boolean {
+  return items.some((item) => !withoutOutlineLines(item.content).trim() || hasEmptyBlock(item.children));
 }
 
 // Whether the block still says what the agent read. Agents copy text out of the page outline, so
