@@ -136,6 +136,15 @@ describe("overwrites", () => {
     expect(result.overwrote).toEqual([]);
   });
 
+  test("moving or folding a block keeps who wrote its text", () => {
+    const rev = setUp();
+    applyBatch(db, { ...phone, ops: [blockOp("a", "p", null, "a1", { content: "from laptop", collapsed: true, base: rev })] });
+    expect(db.query("SELECT writer, device FROM blocks WHERE id = 'a'").get()).toEqual({ writer: "laptop-tab", device: "Laptop" });
+    // So the laptop replacing its own text, from before the phone moved it, overwrites nothing.
+    const result = applyBatch(db, { ...laptop, ops: [blockOp("a", "p", null, "a1", { content: "again", base: rev })] });
+    expect(result.overwrote).toEqual([]);
+  });
+
   test("history older than 30 days is pruned", () => {
     setUp();
     applyBatch(db, { ...phone, ops: [blockOp("a", "p", null, "a0", { content: "from phone", base: 1 })] });

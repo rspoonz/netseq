@@ -1,7 +1,7 @@
 import type { Database } from "bun:sqlite";
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import type { Op } from "../shared/types";
-import { AGENT_WRITER, AgentError, addBlocks, editBlock, pageOutline } from "./agent";
+import { AGENT_WRITER, AgentError, addBlocks, editBlock, moveBlock, pageOutline } from "./agent";
 import { applyBatch } from "./apply";
 import { openDb } from "./db";
 import { getHistory } from "./read";
@@ -97,11 +97,25 @@ describe("adding", () => {
     expect(refused(() => addBlocks(db, { page: "P", text: "x", agent: 1 })).message).toBe("agent must be a name");
   });
 
+  test("fields sent as null count as left out", () => {
+    apply(blockOp("a", "Project", null, "a0"));
+    const { ids } = addBlocks(db, { page: null, parent: null, after: "a", before: null, text: "x", agent: null });
+    expect(outlineOf(db, "project")).toBe("a\nx");
+    expect(db.query("SELECT device FROM blocks WHERE id = ?").get(ids[0])).toEqual({ device: "Agent" });
+    moveBlock(db, { id: ids[0], page: null, before: "a", indent: null, outdent: null });
+    expect(outlineOf(db, "project")).toBe("x\na");
+    editBlock(db, { id: ids[0], content: "y", expect: null });
+    expect(outlineOf(db, "project")).toBe("y\na");
+  });
+
   test("refuses requests it can't follow", () => {
     apply(blockOp("a", "Project", null, "a0"));
     expect(refused(() => addBlocks(db, { text: "x" })).message).toBe("give one of page, parent, after or before");
     expect(refused(() => addBlocks(db, { page: "P", parent: "a", text: "x" })).message).toBe("give one of page, parent, after or before");
     expect(refused(() => addBlocks(db, { page: "P", text: "  " })).status).toBe(400);
+    for (const text of ["- ", "- one\n- ", "- one\n  - ", "id:: 123", "- id:: 1\n- collapsed:: true"]) {
+      expect(refused(() => addBlocks(db, { page: "P", text })).message).toBe("every block needs some text");
+    }
     expect(refused(() => addBlocks(db, { page: "a]]b", text: "x" })).status).toBe(400);
     expect(refused(() => addBlocks(db, { page: 7, text: "x" })).status).toBe(400);
     expect(refused(() => addBlocks(db, { parent: "missing", text: "x" }))).toMatchObject({ message: "no such block", status: 404 });
@@ -149,6 +163,91 @@ describe("adding next to a block", () => {
     addBlocks(db, { after: "b1", text: "- one\n  - under one\n- two" });
     addBlocks(db, { before: "b1", text: "zero" });
     expect(outlineOf(db, "project")).toBe("a\nb\n  zero\n  b1\n  one\n    under one\n  two\n  b2\nc");
+  });
+});
+
+describe("moving", () => {
+  beforeEach(() => {
+    apply(
+      blockOp("a", "Project", null, "a0"),
+      blockOp("b", "Project", null, "a1"),
+      blockOp("b1", "Project", "b", "a0"),
+      blockOp("b1x", "Project", "b1", "a0"),
+      blockOp("b2", "Project", "b", "a1"),
+      blockOp("b3", "Project", "b", "a2"),
+      blockOp("c", "Project", null, "a2"),
+    );
+  });
+
+  const collapsed = (id: string) => (db.query("SELECT collapsed FROM blocks WHERE id = ?").get(id) as { collapsed: number }).collapsed;
+
+  test("goes after or before a block, or under one, with everything under it", () => {
+    expect(moveBlock(db, { id: "b1", after: "c" })).toMatchObject({ id: "b1", page: "Project" });
+    expect(outlineOf(db, "project")).toBe("a\nb\n  b2\n  b3\nc\nb1\n  b1x");
+    moveBlock(db, { id: "c", before: "a" });
+    moveBlock(db, { id: "b3", parent: "a" });
+    expect(outlineOf(db, "project")).toBe("c\na\n  b3\nb\n  b2\nb1\n  b1x");
+  });
+
+  test("to another page, takes everything under it there, and keeps ids and text", () => {
+    apply(blockOp("s", "Solo", null, "a0"));
+    expect(moveBlock(db, { id: "b", page: "other" })).toMatchObject({ page: "other" });
+    expect(outlineOf(db, "project")).toBe("a\nc");
+    expect(outlineOf(db, "other")).toBe("b\n  b1\n    b1x\n  b2\n  b3");
+    moveBlock(db, { id: "s", after: "a" });
+    expect(outlineOf(db, "project")).toBe("a\ns\nc");
+    expect(db.query("SELECT key FROM pages WHERE key = 'solo'").get()).toBeNull(); // nothing left on it
+  });
+
+  test("indenting makes it the last child of the block above it at its level", () => {
+    apply(blockOp("b1", "Project", "b", "a0", { collapsed: true }));
+    expect(moveBlock(db, { id: "b2", indent: true, agent: "Claude" })).toMatchObject({ page: "Project" });
+    expect(outlineOf(db, "project")).toBe("a\nb\n  b1\n    b1x\n    b2\n  b3\nc");
+    expect(collapsed("b1")).toBe(0); // opened, so the moved block stays in view
+    // Moving changed no text, so the text is still the owner's, as history shows once it's replaced.
+    expect(db.query("SELECT content, device FROM blocks WHERE id = 'b2'").get()).toEqual({ content: "b2", device: "Test" });
+    expect(getHistory(db, "b2")).toEqual([]);
+    editBlock(db, { id: "b2", content: "new", agent: "Claude" });
+    expect(getHistory(db, "b2").map((h) => [h.content, h.device])).toEqual([["b2", "Test"]]);
+  });
+
+  test("can't indent the first block at its level", () => {
+    expect(refused(() => moveBlock(db, { id: "b1", indent: true })).message).toBe(
+      "there's no block above it at its level to indent it under",
+    );
+    expect(refused(() => moveBlock(db, { id: "a", indent: true })).status).toBe(400);
+  });
+
+  test("outdenting puts it after its parent, and the blocks below it become its children (Logseq's default)", () => {
+    apply(blockOp("b2x", "Project", "b2", "a0"), blockOp("b2", "Project", "b", "a1", { collapsed: true }));
+    moveBlock(db, { id: "b2", outdent: true });
+    expect(outlineOf(db, "project")).toBe("a\nb\n  b1\n    b1x\nb2\n  b2x\n  b3\nc");
+    expect(collapsed("b2")).toBe(0); // opened, so the blocks that moved under it stay in view
+  });
+
+  test("outdenting the last block at its level moves only it", () => {
+    moveBlock(db, { id: "b3", outdent: true });
+    expect(outlineOf(db, "project")).toBe("a\nb\n  b1\n    b1x\n  b2\nb3\nc");
+    expect(refused(() => moveBlock(db, { id: "a", outdent: true })).message).toBe("it's already at the top level");
+  });
+
+  test("refuses moves it can't make", () => {
+    const before = outlineOf(db, "project");
+    expect(refused(() => moveBlock(db, { id: "b", parent: "b" })).message).toBe(
+      "a block can't move under itself or a block under it",
+    );
+    expect(refused(() => moveBlock(db, { id: "b", after: "b1x" })).status).toBe(400);
+    expect(refused(() => moveBlock(db, { id: "b", before: "b" })).message).toBe("a block can't move next to itself");
+    expect(refused(() => moveBlock(db, { id: "b" })).message).toBe(
+      "give one of page, parent, after, before, indent or outdent",
+    );
+    expect(refused(() => moveBlock(db, { id: "b", after: "a", indent: true })).status).toBe(400);
+    expect(refused(() => moveBlock(db, { id: "b2", indent: "yes" })).message).toBe("indent must be true");
+    expect(refused(() => moveBlock(db, { id: "b", after: 3 })).message).toBe("after must be a block id");
+    expect(refused(() => moveBlock(db, { id: "missing", indent: true }))).toMatchObject({ status: 404 });
+    expect(refused(() => moveBlock(db, { id: "b", after: "missing" }))).toMatchObject({ status: 404 });
+    expect(refused(() => moveBlock(db, { id: 7, indent: true })).status).toBe(400);
+    expect(outlineOf(db, "project")).toBe(before);
   });
 });
 

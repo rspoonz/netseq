@@ -175,7 +175,7 @@ test("/agents serves the agent guide as markdown, and every endpoint it lists ex
   }
 });
 
-test("agents add and edit blocks over HTTP; open tabs hear of it", async () => {
+test("agents add, edit and move blocks over HTTP; open tabs hear of it", async () => {
   const controller = new AbortController();
   const events = (await fetch(`${base}/api/events`, { signal: controller.signal })).body!.getReader();
   const post = (path: string, body: unknown) =>
@@ -196,6 +196,15 @@ test("agents add and edit blocks over HTTP; open tabs hear of it", async () => {
   );
   const history = (await (await fetch(`${base}/api/blocks/${ids[0]}/history`)).json()) as HistoryEntry[];
   expect(history.map((h) => [h.content, h.device])).toEqual([["TODO first", "Agent"]]);
+
+  const moved = await post("move", { id: ids[1], outdent: true });
+  expect(await moved.json()).toEqual({ id: ids[1], page: "Agent Notes" });
+  expect(await (await fetch(`${base}/api/agent/page?name=agent%20notes`)).text()).toBe(
+    `- DONE first\n  id:: ${ids[0]}\n\t- summary\n\t  id:: ${inserted.ids[0]}\n- detail\n  id:: ${ids[1]}`,
+  );
+  expect(await (await post("move", { id: ids[0], indent: true })).json()).toEqual({
+    error: "there's no block above it at its level to indent it under",
+  });
 
   expect((await fetch(`${base}/api/agent/page?name=nowhere`)).status).toBe(404);
   expect(await (await post("edit", { id: "missing", content: "x" })).json()).toEqual({ error: "no such block" });

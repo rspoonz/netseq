@@ -50,13 +50,16 @@ export function applyBatch(db: Database, batch: Batch, now = Date.now()): BatchR
     const ctx = indexContext(now);
     const { created, emptied } = ctx;
 
+    // writer and device say who wrote the block's text, so moving or folding a block keeps them.
     const upsert = db.query(`
       INSERT INTO blocks (id, page, parent, order_key, content, collapsed, rev, writer, device, updated_at)
       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       ON CONFLICT (id) DO UPDATE SET
         page = excluded.page, parent = excluded.parent, order_key = excluded.order_key,
         content = excluded.content, collapsed = excluded.collapsed, rev = excluded.rev,
-        writer = excluded.writer, device = excluded.device, updated_at = excluded.updated_at`);
+        writer = CASE WHEN content = excluded.content THEN writer ELSE excluded.writer END,
+        device = CASE WHEN content = excluded.content THEN device ELSE excluded.device END,
+        updated_at = excluded.updated_at`);
 
     for (const op of batch.ops) {
       if (op.t !== "block") continue;
@@ -313,7 +316,8 @@ function repair(db: Database, touched: Set<string>, emptied: Set<string>, rev: n
   }
 }
 
-function createsCycle(db: Database, id: string, parent: string): boolean {
+/** Whether giving block `id` this parent would put it under itself. */
+export function createsCycle(db: Database, id: string, parent: string): boolean {
   const parentOf = db.query("SELECT parent FROM blocks WHERE id = ?");
   const seen = new Set<string>();
   for (let current: string | null = parent; current !== null; ) {
