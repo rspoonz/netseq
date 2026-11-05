@@ -1,0 +1,10 @@
+node_modules/
+web/dist/
+data/
+.env*
+*.db
+*.db-wal
+*.db-shm
+test-results/
+playwright-report/
+e2e/.data/

@@ -1,0 +1,16 @@
+{
+  // Server, shared code and scripts (Bun). The browser app has its own config in web/.
+  "compilerOptions": {
+    "target": "ESNext",
+    "module": "ESNext",
+    "moduleResolution": "bundler",
+    "moduleDetection": "force",
+    "lib": ["ESNext"],
+    "types": ["bun"],
+    "strict": true,
+    "noEmit": true,
+    "skipLibCheck": true,
+    "verbatimModuleSyntax": true
+  },
+  "include": ["server", "shared", "scripts", "vite.config.ts", "playwright.config.ts", "web/src/**/*.test.ts"]
+}

@@ -1,0 +1,31 @@
+{
+  "name": "netseq",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "bun scripts/dev.ts",
+    "build": "vite build",
+    "start": "bun server/main.ts",
+    "backup": "bun scripts/backup.ts",
+    "export": "bun scripts/export.ts",
+    "bench": "bun scripts/bench.ts",
+    "test": "bun test",
+    "typecheck": "tsc --noEmit -p tsconfig.json && tsc --noEmit -p e2e/tsconfig.json && vue-tsc --noEmit -p web/tsconfig.json",
+    "check": "bun run typecheck && bun test && playwright test",
+    "e2e": "playwright test"
+  },
+  "dependencies": {
+    "fractional-indexing": "^4.0.0",
+    "markdown-it": "^15.0.3",
+    "vue": "^3.5.44",
+    "vue-router": "^5.4.0"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.64.1",
+    "@types/bun": "^1.4.4",
+    "@vitejs/plugin-vue": "^6.0.10",
+    "typescript": "^6",
+    "vite": "^8.3.5",
+    "vue-tsc": "^3.3.14"
+  }
+}

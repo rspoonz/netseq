@@ -1,0 +1,6 @@
+{
+  // The tests run in Node, but the callbacks passed to page.evaluate() run in the browser.
+  "extends": "../tsconfig.json",
+  "compilerOptions": { "lib": ["ESNext", "DOM", "DOM.Iterable"] },
+  "include": ["."]
+}

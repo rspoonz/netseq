@@ -1,0 +1,964 @@
+/* Colours from the Kanagawa theme (github.com/rebelot/kanagawa.nvim): Lotus when the system is
+   light, Wave when it's dark. Its names are in the comments. Muted text is springViolet1 in Wave,
+   because Kanagawa's comment grey (fujiGray) is too faint for small text on the background. */
+:root {
+  color-scheme: light dark;
+  --bg: #f2ecbc; /* lotusWhite3 */
+  --fg: #545464; /* lotusInk1 */
+  --muted: #716e61; /* lotusGray2 */
+  --accent: #4d699b; /* lotusBlue4 */
+  --border: #d5cea3; /* lotusWhite0 */
+  --danger: #c84053; /* lotusRed */
+  --highlight: #b5cbd2; /* lotusBlue2: search matches */
+  accent-color: var(--accent); /* checkboxes */
+  --title-size: 1.5rem; /* page titles, journal days, and the page-rename box */
+  font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  line-height: 1.5;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #1f1f28; /* sumiInk3 */
+    --fg: #dcd7ba; /* fujiWhite */
+    --muted: #938aa9; /* springViolet1 */
+    --accent: #7e9cd8; /* crystalBlue */
+    --border: #363646; /* sumiInk5 */
+    --danger: #e46876; /* waveRed */
+    --highlight: #2d4f67; /* waveBlue2: search matches */
+  }
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--fg);
+}
+
+a {
+  color: var(--accent);
+  text-decoration: none;
+}
+
+a:hover {
+  text-decoration: underline;
+}
+
+.topbar {
+  display: flex;
+  align-items: center;
+  gap: 1.5rem;
+  padding: 0.75rem 1rem;
+  border-bottom: 1px solid var(--border);
+}
+
+.topbar .brand {
+  font-weight: 600;
+  color: var(--fg);
+}
+
+.topbar nav {
+  display: flex;
+  gap: 1rem;
+}
+
+/* Tabs: grey, with the current one in the text colour and underlined. */
+.topbar nav a {
+  padding: 0.2rem 0;
+  color: var(--muted);
+  border-bottom: 2px solid transparent;
+}
+
+.topbar nav a:hover {
+  color: var(--fg);
+  text-decoration: none;
+}
+
+.topbar nav a.router-link-exact-active {
+  color: var(--fg);
+  border-bottom-color: var(--accent);
+}
+
+.content {
+  max-width: 46rem;
+  margin: 0 auto;
+  padding: 1.5rem 1rem 4rem;
+}
+
+/* A page's title, and each day's on the Journals tab: a day looks the same there as on its own page. */
+h1,
+.journal-day h2 {
+  font-size: var(--title-size);
+  margin: 0 0 1rem;
+}
+
+.muted {
+  color: var(--muted);
+}
+
+.error {
+  color: var(--danger);
+}
+
+.page-filter {
+  width: 100%;
+  padding: 0.4rem 0.6rem;
+  font: inherit;
+  color: inherit;
+  border: 1px solid var(--border);
+  border-radius: 0.375rem;
+  background: transparent;
+}
+
+.page-count {
+  margin: 0.5rem 0 0;
+  font-size: 0.85rem;
+}
+
+.page-list {
+  list-style: none;
+  padding: 0;
+}
+
+.page-list li {
+  padding: 0.25rem 0;
+}
+
+.sync {
+  margin-left: auto;
+  font-size: 0.85rem;
+  color: var(--muted);
+}
+
+.sync.offline,
+.sync.error {
+  color: var(--danger);
+}
+
+/* Journals */
+
+.journal-day {
+  margin-bottom: 2.5rem;
+}
+
+.journal-day h2 a {
+  color: var(--fg);
+}
+
+.journal-end {
+  height: 1px;
+}
+
+/* Outline. The rendered text and the editor share their metrics, so switching doesn't jump. */
+
+.outline {
+  margin: 0.25rem 0 1rem;
+}
+
+.outline-start {
+  display: block;
+  width: 100%;
+  padding: 0.25rem 0 0.25rem 1.25rem;
+  border: 0;
+  background: none;
+  color: var(--muted);
+  font: inherit;
+  text-align: left;
+  cursor: text;
+}
+
+.block-row {
+  position: relative;
+  display: flex;
+  align-items: flex-start;
+}
+
+.block-toggle {
+  position: absolute;
+  left: -1.25rem;
+  top: 0;
+  width: 1.25rem;
+  height: 1.75rem;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--muted);
+  font-size: 0.8rem;
+  cursor: pointer;
+  opacity: 0;
+  transition: transform 0.1s;
+}
+
+.block-toggle.collapsed {
+  transform: rotate(-90deg);
+}
+
+.block-row:hover > .block-toggle,
+.block-toggle:focus-visible {
+  opacity: 1;
+}
+
+.block-bullet {
+  flex: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.25rem;
+  height: 1.75rem;
+}
+
+.block-bullet::before {
+  content: "";
+  width: 0.375rem;
+  height: 0.375rem;
+  border-radius: 50%;
+  background: var(--muted);
+}
+
+.block-bullet.collapsed::before {
+  box-shadow: 0 0 0 0.2rem var(--border);
+}
+
+.block-editor-wrap {
+  position: relative;
+  flex: 1;
+  min-width: 0;
+}
+
+.block-content,
+.block-editor {
+  flex: 1;
+  min-width: 0;
+  min-height: 1.75rem;
+  margin: 0;
+  padding: 0.125rem 0;
+  font: inherit;
+  line-height: 1.5rem;
+  overflow-wrap: anywhere;
+  color: inherit;
+}
+
+.block-content {
+  cursor: text;
+}
+
+.block-editor {
+  display: block;
+  white-space: pre-wrap;
+  width: 100%;
+  border: 0;
+  outline: none;
+  background: transparent;
+  resize: none;
+  overflow: hidden;
+}
+
+.block-children {
+  margin-left: 0.6rem;
+  padding-left: 0.65rem;
+  border-left: 1px solid var(--border);
+}
+
+/* Phones */
+
+.mobile-toolbar {
+  position: fixed;
+  left: 0;
+  right: 0;
+  display: flex;
+  justify-content: space-around;
+  padding: 0.25rem;
+  border-top: 1px solid var(--border);
+  background: var(--bg);
+}
+
+.mobile-toolbar button {
+  flex: 1 1 0; /* share the width: ten buttons fit a 375px-wide phone */
+  min-width: 0;
+  min-height: 2.5rem;
+  border: 0;
+  background: none;
+  color: var(--fg);
+  font-size: 1.1rem;
+}
+
+@media (pointer: coarse) {
+  .content {
+    padding-bottom: 6rem; /* room for the toolbar */
+  }
+
+  .block-toggle {
+    opacity: 1; /* there's no hover to reveal it */
+  }
+}
+
+/* Notices and earlier versions */
+
+.notices {
+  position: fixed;
+  left: 50%;
+  bottom: 1rem;
+  transform: translateX(-50%);
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  width: min(30rem, calc(100% - 2rem));
+}
+
+.notice {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.6rem 0.75rem;
+  border: 1px solid var(--border);
+  border-radius: 0.5rem;
+  background: var(--bg);
+  box-shadow: 0 0.25rem 1rem rgb(0 0 0 / 0.15);
+}
+
+.notice span {
+  flex: 1;
+}
+
+.notice button,
+.history button {
+  border: 0;
+  background: none;
+  color: var(--accent);
+  font: inherit;
+  cursor: pointer;
+}
+
+.history {
+  position: fixed;
+  inset: 4rem 1rem auto;
+  max-width: 34rem;
+  max-height: calc(100vh - 6rem);
+  margin: 0 auto;
+  overflow: auto;
+  padding: 1rem;
+  border: 1px solid var(--border);
+  border-radius: 0.5rem;
+  background: var(--bg);
+  box-shadow: 0 0.5rem 2rem rgb(0 0 0 / 0.2);
+}
+
+.history-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.history-header h2 {
+  margin: 0;
+  font-size: 1.1rem;
+}
+
+.history-about {
+  margin: 0.25rem 0 0;
+  font-size: 0.85rem;
+}
+
+.history-now {
+  display: flex;
+  gap: 0.75rem;
+}
+
+.history-list {
+  list-style: none;
+  padding: 0;
+}
+
+.history-list li {
+  padding: 0.75rem 0;
+  border-top: 1px solid var(--border);
+}
+
+.history-text {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.history button:disabled {
+  color: var(--muted);
+  cursor: default;
+}
+
+/* Rendered block text */
+
+/* A task's text sits one level down, in .task-text: without it there, a task's first line
+   would sit below its bullet. */
+.block-content > :first-child,
+.task-text > :first-child {
+  margin-top: 0;
+}
+
+.block-content > :last-child,
+.task-text > :last-child {
+  margin-bottom: 0;
+}
+
+.block-content p,
+.block-content ul,
+.block-content ol,
+.block-content pre,
+.block-content blockquote {
+  margin: 0.25rem 0;
+}
+
+.block-content h1,
+.block-content h2,
+.block-content h3 {
+  margin: 0.25rem 0;
+  line-height: 1.3;
+}
+
+.block-content h1 {
+  font-size: 1.5rem;
+}
+
+.block-content h2 {
+  font-size: 1.3rem;
+}
+
+.block-content h3 {
+  font-size: 1.15rem;
+}
+
+.block-content code,
+.block-content pre {
+  font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+  font-size: 0.9em;
+  background: color-mix(in srgb, var(--fg) 7%, transparent);
+  border-radius: 0.25rem;
+}
+
+.block-content code {
+  padding: 0.05rem 0.25rem;
+}
+
+.block-content pre {
+  padding: 0.5rem 0.75rem;
+  overflow-x: auto;
+  white-space: pre;
+}
+
+.block-content pre code {
+  padding: 0;
+  background: none;
+}
+
+.block-content blockquote {
+  padding-left: 0.75rem;
+  border-left: 3px solid var(--border);
+  color: var(--muted);
+}
+
+.block-content img {
+  max-width: 100%;
+}
+
+.page-ref::before,
+.page-ref::after {
+  color: var(--muted);
+  opacity: 0.5;
+}
+
+/* The brackets are decoration: the second declaration keeps them out of what screen readers say. */
+.page-ref::before {
+  content: "[[";
+  content: "[[" / "";
+}
+
+.page-ref::after {
+  content: "]]";
+  content: "]]" / "";
+}
+
+.tag {
+  color: var(--accent);
+}
+
+.block-row.selected {
+  background: color-mix(in srgb, var(--accent) 15%, transparent);
+  border-radius: 0.25rem;
+}
+
+/* Page name suggestions */
+
+.ref-popup {
+  position: absolute;
+  z-index: 10;
+  min-width: 14rem;
+  max-width: 24rem;
+  margin: 0;
+  padding: 0.25rem 0;
+  list-style: none;
+  border: 1px solid var(--border);
+  border-radius: 0.375rem;
+  background: var(--bg);
+  box-shadow: 0 0.25rem 1rem rgb(0 0 0 / 0.15);
+}
+
+.ref-popup li {
+  padding: 0.3rem 0.75rem;
+  cursor: pointer;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.ref-popup li.active {
+  background: color-mix(in srgb, var(--accent) 15%, transparent);
+}
+
+/* Page titles, references, breadcrumbs */
+
+h1.renamable {
+  cursor: text;
+}
+
+.page-title-input {
+  width: 100%;
+  margin: 0 0 1rem;
+  padding: 0;
+  border: 0;
+  border-bottom: 1px solid var(--border);
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  font-size: var(--title-size); /* the same as the title, so renaming doesn't jump */
+  font-weight: bold;
+  outline: none;
+}
+
+.linked-refs {
+  margin-top: 2.5rem;
+  padding-top: 1rem;
+  border-top: 1px solid var(--border);
+}
+
+.linked-refs h2 {
+  font-size: 1rem;
+  color: var(--muted);
+  margin: 0 0 1rem;
+}
+
+.ref-root {
+  margin: 0.75rem 0 0.25rem;
+}
+
+/* One breadcrumb style everywhere: zoomed-in blocks and every list of blocks shown away from their page */
+.crumbs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+  color: var(--muted);
+}
+
+/* Tasks, dates and properties */
+
+.task {
+  display: flex;
+  align-items: baseline;
+  gap: 0.35rem;
+}
+
+.task-check {
+  margin: 0; /* on the first line's baseline, like the marker, also when the text wraps */
+  cursor: pointer;
+}
+
+.task .marker {
+  font-size: 0.75rem;
+  font-weight: 600;
+  letter-spacing: 0.03em;
+  color: var(--muted);
+}
+
+.task-doing .marker,
+.task-now .marker {
+  color: var(--accent);
+}
+
+.task-text {
+  flex: 1;
+  min-width: 0;
+}
+
+.task-done .task-text,
+.task-canceled .task-text {
+  text-decoration: line-through;
+  color: var(--muted);
+}
+
+.priority {
+  display: inline-block;
+  padding: 0 0.3rem;
+  border-radius: 0.25rem;
+  font-size: 0.75rem;
+  font-weight: 600;
+  line-height: 1.4;
+  color: var(--bg);
+  background: var(--muted);
+}
+
+.priority-a {
+  background: var(--danger);
+}
+
+.priority-b {
+  background: var(--accent);
+}
+
+.task-dates {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0 1rem;
+  font-size: 0.85rem;
+  color: var(--muted);
+}
+
+.props {
+  margin: 0.25rem 0 0;
+  padding: 0.25rem 0.5rem;
+  font-size: 0.9rem;
+  border-radius: 0.25rem;
+  background: color-mix(in srgb, var(--muted) 8%, transparent);
+}
+
+.props div {
+  display: flex;
+  gap: 0.5rem;
+}
+
+.props dt {
+  color: var(--muted);
+}
+
+.props dt::after {
+  content: ":";
+}
+
+.props dd {
+  margin: 0;
+}
+
+.block-content code.macro {
+  color: var(--muted);
+}
+
+/* Query results, the agenda, unlinked references */
+
+.query-results {
+  margin: 0.25rem 0 0.75rem 1.5rem;
+  padding: 0.25rem 0.75rem 0.5rem;
+  border-left: 2px solid var(--border);
+}
+
+.query-count {
+  margin: 0;
+  font-size: 0.85rem;
+  color: var(--muted);
+}
+
+.agenda {
+  margin-top: 1.5rem;
+}
+
+.agenda h2,
+.unlinked-refs h2 {
+  font-size: 1rem;
+  color: var(--muted);
+  margin: 0 0 0.5rem;
+}
+
+.unlinked-refs {
+  margin-top: 1.5rem;
+}
+
+.section-toggle {
+  padding: 0;
+  border: 0;
+  font: inherit;
+  color: inherit;
+  background: none;
+  cursor: pointer;
+}
+
+.section-toggle::before {
+  content: "▸ ";
+}
+
+.section-toggle[aria-expanded="true"]::before {
+  content: "▾ ";
+}
+
+/* Date picker for /Scheduled, /Deadline and /Date picker */
+
+.date-popup {
+  display: flex;
+  gap: 0.5rem;
+  padding: 0.5rem;
+  min-width: 0;
+}
+
+.date-popup input,
+.date-popup button {
+  font: inherit;
+}
+
+/* Search */
+
+.search-button {
+  margin-left: auto;
+  padding: 0.2rem 0.75rem;
+  font: inherit;
+  font-size: 0.9rem;
+  color: var(--muted);
+  border: 1px solid var(--border);
+  border-radius: 0.375rem;
+  background: none;
+  cursor: pointer;
+}
+
+.search-button + .sync {
+  margin-left: 0;
+}
+
+.palette-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 30;
+  display: flex;
+  justify-content: center;
+  align-items: flex-start;
+  padding: 10vh 1rem 1rem;
+  background: rgb(0 0 0 / 0.3);
+}
+
+.palette {
+  width: min(40rem, 100%);
+  max-height: 75vh;
+  display: flex;
+  flex-direction: column;
+  border: 1px solid var(--border);
+  border-radius: 0.5rem;
+  background: var(--bg);
+  box-shadow: 0 0.5rem 2rem rgb(0 0 0 / 0.25);
+  overflow: hidden;
+}
+
+.palette-input {
+  width: 100%;
+  padding: 0.75rem 1rem;
+  font: inherit;
+  font-size: 1.05rem;
+  color: inherit;
+  border: 0;
+  border-bottom: 1px solid var(--border);
+  outline: none;
+  background: transparent;
+}
+
+.palette-list {
+  margin: 0;
+  padding: 0.25rem 0;
+  list-style: none;
+  overflow-y: auto;
+}
+
+.palette-error {
+  margin: 0;
+  padding: 0.5rem 1rem;
+  font-size: 0.9rem;
+}
+
+.palette-list li {
+  display: flex;
+  flex-direction: column;
+  padding: 0.4rem 1rem;
+  cursor: pointer;
+}
+
+.palette-list li.active {
+  background: color-mix(in srgb, var(--accent) 15%, transparent);
+}
+
+.palette-kind {
+  font-size: 0.75rem;
+  color: var(--muted);
+}
+
+.palette-snippet {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.palette-snippet mark {
+  color: inherit;
+  background: var(--highlight);
+  border-radius: 0.15rem;
+}
+
+/* Block references */
+
+.block-ref {
+  color: inherit;
+  border-bottom: 1px solid color-mix(in srgb, var(--accent) 50%, transparent);
+  border-radius: 0.15rem;
+  background: color-mix(in srgb, var(--accent) 7%, transparent);
+  padding: 0 0.15rem;
+}
+
+.block-ref:hover {
+  text-decoration: none;
+  background: color-mix(in srgb, var(--accent) 15%, transparent);
+}
+
+/* A reference is one link into NetSeq, so nothing inside it looks like a link of its own. */
+.block-ref .ref-link,
+.block-ref .page-ref,
+.block-ref .tag {
+  color: inherit;
+}
+
+.block-ref.missing {
+  color: var(--danger);
+  border-bottom-style: dashed;
+}
+
+.ref-count {
+  flex: none;
+  align-self: flex-start;
+  margin: 0.3rem 0 0 0.5rem;
+  min-width: 1.4rem;
+  padding: 0 0.35rem;
+  font: inherit;
+  font-size: 0.75rem;
+  line-height: 1.2rem;
+  color: var(--muted);
+  border: 1px solid var(--border);
+  border-radius: 0.7rem;
+  background: none;
+  cursor: pointer;
+}
+
+.ref-count[aria-expanded="true"] {
+  color: var(--accent);
+  border-color: var(--accent);
+}
+
+.block-refs {
+  margin: 0.25rem 0 0.75rem 1.5rem;
+  padding: 0 0.75rem 0.25rem;
+  border-left: 2px solid color-mix(in srgb, var(--accent) 40%, transparent);
+}
+
+.bullet-menu {
+  position: fixed;
+  z-index: 25;
+  padding: 0.25rem 0;
+  border: 1px solid var(--border);
+  border-radius: 0.375rem;
+  background: var(--bg);
+  box-shadow: 0 0.25rem 1rem rgb(0 0 0 / 0.15);
+}
+
+.bullet-menu button {
+  display: block;
+  width: 100%;
+  padding: 0.35rem 1rem;
+  font: inherit;
+  text-align: left;
+  color: inherit;
+  border: 0;
+  background: none;
+  cursor: pointer;
+}
+
+.bullet-menu button:hover {
+  background: color-mix(in srgb, var(--accent) 15%, transparent);
+}
+
+/* Block suggestions after ((: wider, and each one up to two lines */
+.ref-popup.blocks {
+  width: min(32rem, 90vw);
+  max-width: none;
+}
+
+.ref-popup.blocks li {
+  white-space: normal;
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
+}
+
+/* Zooming in: the trail from the page down to the block, at full size */
+.zoom-header {
+  margin-bottom: 1rem;
+}
+
+/* Every step of a trail is a link, so all are blue; the page it starts from is bold. */
+.crumbs a.crumb-page {
+  font-weight: 600;
+}
+
+/* A block opened from elsewhere flashes briefly */
+.block-row.revealed {
+  border-radius: 0.25rem;
+  animation: revealed 2s ease-out;
+}
+
+@keyframes revealed {
+  from {
+    background: color-mix(in srgb, var(--accent) 30%, transparent);
+  }
+  to {
+    background: transparent;
+  }
+}
+
+.page-section {
+  margin: 1.5rem 0 0;
+  font-size: 1rem;
+  color: var(--muted);
+}
+
+/* A small outlined button, like Search in the top bar: "Show all" on the Pages tab, "Try again"
+   under the journals. Outlined so it doesn't read as one more link in a list. */
+.outline-button {
+  margin-top: 0.5rem;
+  padding: 0.2rem 0.75rem;
+  font: inherit;
+  font-size: 0.9rem;
+  color: var(--muted);
+  border: 1px solid var(--border);
+  border-radius: 0.375rem;
+  background: none;
+  cursor: pointer;
+}
+
+.outline-button:hover {
+  color: var(--fg);
+}
+
+/* Dates line up when every digit has the same width */
+.journal-day h2,
+.page-list.days {
+  font-variant-numeric: tabular-nums;
+}
+
+/* Links that leave NetSeq (to another site) get a ↗; everything else stays in the app. */
+a.external::after {
+  content: "\2197";
+  content: "\2197" / "";
+  margin-left: 0.1em;
+  font-size: 0.8em;
+  vertical-align: 0.1em;
+}
