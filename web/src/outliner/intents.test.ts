@@ -134,6 +134,13 @@ describe("merging (Backspace at the start, Delete at the end)", () => {
     expect(textOf(o)).toBe("a");
   });
 
+  test("Backspace in a block of only spaces deletes it too", () => {
+    const o = outlineOf("a\nb");
+    apply(o, intents.setContent(o, "b", "  "));
+    expect(apply(o, intents.mergeWithPrevious(o, "b")).caret).toEqual({ id: "a", offset: 1 });
+    expect(textOf(o)).toBe("a");
+  });
+
   test("merging a first child into its parent keeps its children in its place", () => {
     const o = outlineOf("a\n  b\n    x\n  c");
     apply(o, intents.mergeWithPrevious(o, "b"));

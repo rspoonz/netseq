@@ -55,6 +55,15 @@ describe("references", () => {
     apply(blockOp("a", "Notes", null, "a0", { content: "due [[2026-12-24]]" }), blockOp("j", "2026-11-01", null, "a0"));
     expect(getJournals(db, 20270101, 10).map((d) => d.page?.key)).toEqual(["2026-11-01"]);
   });
+
+  test("a journal day with only blank blocks doesn't show up in the journals", () => {
+    apply(
+      blockOp("j", "2026-11-01", null, "a0"),
+      blockOp("s", "1998-04-16", null, "a0", { content: " " }),
+      blockOp("n", "1996-02-07", null, "a0", { content: "\n\t " }),
+    );
+    expect(getJournals(db, 20270101, 10).map((d) => d.page?.key)).toEqual(["2026-11-01"]);
+  });
 });
 
 describe("recently changed pages", () => {

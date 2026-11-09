@@ -12,7 +12,6 @@ import { looksLikeOutline, parseOutline } from "../../../shared/markdownOutline"
 import { insertOutline } from "./clipboard";
 import * as intents from "./intents";
 import { type Command, keyCommand } from "./keymap";
-import { topKey } from "./outline";
 import { blocksOnScreen, selectBlock } from "./selection";
 import { applySlash, matchCommands, type SlashCommand, type SlashQuery, slashQueryAt } from "./slash";
 import { commit, redo, undo } from "./undo";
@@ -398,16 +397,17 @@ function leave(): void {
   // blurs after a command already moved the caret to another block.
   if (!isPlacingCaret() && editing.id === props.id && editing.view === props.view) {
     stopEditing();
-    removeIfLoneEmptyBlock();
+    removeIfBlank();
   }
   void flush();
 }
 
-// Clicking into an empty page and leaving again shouldn't leave an empty block (or page) behind.
-function removeIfLoneEmptyBlock(): void {
+// A block left with no text (or only spaces) and nothing under it isn't kept, wherever it is: blank
+// blocks exist only while you're on them. (Not undoable: undo puts back whole block states anyway.)
+function removeIfBlank(): void {
   const b = outline.get(props.id);
-  if (!b || b.content !== "" || b.parent !== null || outline.childIds(b.id).length > 0) return;
-  if (outline.childIds(topKey(b.page)).length === 1) commit({ upserts: [], deletes: [b.id] }, undefined, { record: false });
+  if (!b || !intents.isBlank(b.content) || outline.childIds(b.id).length > 0) return;
+  commit({ upserts: [], deletes: [b.id] }, undefined, { record: false });
 }
 
 onMounted(() => {
@@ -416,6 +416,9 @@ onMounted(() => {
   setActiveEditor(run);
 });
 onBeforeUnmount(() => {
+  // Moving to another block (arrows, a click, Enter) closes this editor, sometimes without a blur.
+  // Still on this block means it's only being re-rendered, after an indent say.
+  if (editing.id !== props.id) removeIfBlank();
   clearActiveEditor(run);
   clearTimeout(searchTimer);
   document.removeEventListener("pointerdown", onOutsidePointer, true);
