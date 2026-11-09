@@ -158,6 +158,22 @@ test("leaving an empty page without typing doesn't create it", async ({ page, re
   expect(data.page).toBeNull();
 });
 
+test("blank blocks, even ones with only spaces, aren't kept once you leave them", async ({ page, request }) => {
+  const name = await openFreshPage(page);
+  await startWriting(page);
+  await page.keyboard.type("one");
+  await page.keyboard.press("Enter");
+  await page.keyboard.type("   "); // only spaces
+  await page.keyboard.press("Enter");
+  await page.keyboard.type("three");
+  await page.keyboard.press("Enter"); // a blank block, left by clicking away
+  await page.mouse.click(5, 5);
+  await expect(page.locator(".block-content")).toHaveText(["one", "three"]);
+  await expectSaved(page);
+  const data = await (await request.get(`/api/page?name=${encodeURIComponent(name)}`)).json();
+  expect(data.blocks.map((b: { content: string }) => b.content)).toEqual(["one", "three"]);
+});
+
 test("today's journal is on the home page", async ({ page }) => {
   await page.goto("/");
   // The day's own heading and outline (today's agenda sits in the same section).

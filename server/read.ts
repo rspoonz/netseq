@@ -26,8 +26,11 @@ export function getJournals(db: Database, before: number, limit: number): PageDa
   const rev = currentRev(db);
   const pages = db
     .query(
-      // Only days with something written: a [[2026-12-24]] link alone creates an empty journal page.
-      "SELECT key, name, journal_day FROM pages WHERE journal_day < ? AND EXISTS (SELECT 1 FROM blocks WHERE page = pages.key) ORDER BY journal_day DESC LIMIT ?",
+      // Only days with something written: a [[2026-12-24]] link alone creates an empty journal page,
+      // and a block of only spaces or line breaks counts as nothing written.
+      `SELECT key, name, journal_day FROM pages WHERE journal_day < ?
+         AND EXISTS (SELECT 1 FROM blocks WHERE page = pages.key AND trim(content, ' ' || char(9, 10, 13)) != '')
+       ORDER BY journal_day DESC LIMIT ?`,
     )
     .all(before, limit) as PageSummary[];
   return pages.map((page) => ({ page, blocks: blocksOf(db, page.key), rev }));

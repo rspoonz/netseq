@@ -4,6 +4,7 @@ import { RouterLink } from "vue-router";
 import { dayNumber, journalName, journalTitle } from "../../../shared/names";
 import { fetchJournalDays, fetchJournals } from "../api";
 import Agenda from "../outliner/Agenda.vue";
+import { isBlank } from "../outliner/intents";
 import PageOutline from "../outliner/PageOutline.vue";
 import { applyPageData, refreshes } from "../store";
 
@@ -32,9 +33,9 @@ async function reload(): Promise<void> {
     const names = [today.value, ...older.value];
     const days = await fetchJournalDays(names);
     names.forEach((name, i) => applyPageData(name, days[i]));
-    // Today always shows; an older day whose blocks were all deleted elsewhere drops out. (By
+    // Today always shows; an older day whose blocks were all deleted (or blanked) elsewhere drops out. (By
     // name: more days may have loaded while this request was out.)
-    const emptied = new Set(names.filter((name, i) => i > 0 && days[i].blocks.length === 0));
+    const emptied = new Set(names.filter((name, i) => i > 0 && days[i].blocks.every((b) => isBlank(b.content))));
     older.value = older.value.filter((name) => !emptied.has(name));
     status.value = "ready";
     if (moreFailed.value) retryMore(); // back online

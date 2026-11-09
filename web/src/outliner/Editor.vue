@@ -12,7 +12,6 @@ import { looksLikeOutline, parseOutline } from "../../../shared/markdownOutline"
 import { insertOutline } from "./clipboard";
 import * as intents from "./intents";
 import { type Command, keyCommand } from "./keymap";
-import { topKey } from "./outline";
 import { blocksOnScreen, selectBlock } from "./selection";
 import { applySlash, matchCommands, type SlashCommand, type SlashQuery, slashQueryAt } from "./slash";
 import { commit, redo, undo } from "./undo";
@@ -193,23 +192,41 @@ function confirmDate(): void {
   finishSlash(pending.q, pending.command, day.value);
 }
 
-function cancelDate(): void {
+/** Closes the date popup without a date, dropping the typed "/command". */
+function abandonDate(refocus: boolean): void {
   const pending = dating.value;
   const el = textarea.value;
   if (!pending || !el) return;
-  el.focus();
+  if (refocus) el.focus();
   dating.value = null;
-  // Drop the typed "/command".
   const change = intents.setContent(outline, props.id, el.value.slice(0, pending.q.start) + el.value.slice(pending.q.end));
-  if (change) commit(change, caret());
-  startEditing(props.view, props.id, pending.q.start);
+  if (change) commit(change, refocus ? caret() : undefined);
+  if (refocus) startEditing(props.view, props.id, pending.q.start);
 }
 
+function cancelDate(): void {
+  abandonDate(true);
+}
+
+// On iPhones, the date picker's "Done" blurs the field with nowhere for focus to go, and tapping
+// "Insert" doesn't focus the button, so a blur to nothing keeps the popup open. A tap outside
+// (below) or focus moving to something else closes it.
 function onDateBlur(event: FocusEvent): void {
-  if (focusStaysInside(event)) return;
-  dating.value = null;
+  if (event.relatedTarget === null || focusStaysInside(event)) return;
+  abandonDate(false);
   leave();
 }
+
+function onOutsidePointer(event: PointerEvent): void {
+  if (event.target instanceof Node && wrap.value?.contains(event.target)) return;
+  abandonDate(false);
+  leave();
+}
+
+watch(dating, (now, before) => {
+  if (now && !before) document.addEventListener("pointerdown", onOutsidePointer, true);
+  else if (!now && before) document.removeEventListener("pointerdown", onOutsidePointer, true);
+});
 
 // --- Editing --------------------------------------------------------------------------------
 
@@ -370,6 +387,7 @@ function focusStaysInside(event: FocusEvent): boolean {
 
 function onBlur(event: FocusEvent): void {
   if (focusStaysInside(event)) return; // into the date field
+  if (dating.value && event.relatedTarget === null) return; // see onDateBlur
   closeSuggestions();
   leave();
 }
@@ -379,16 +397,17 @@ function leave(): void {
   // blurs after a command already moved the caret to another block.
   if (!isPlacingCaret() && editing.id === props.id && editing.view === props.view) {
     stopEditing();
-    removeIfLoneEmptyBlock();
+    removeIfBlank();
   }
   void flush();
 }
 
-// Clicking into an empty page and leaving again shouldn't leave an empty block (or page) behind.
-function removeIfLoneEmptyBlock(): void {
+// A block left with no text (or only spaces) and nothing under it isn't kept, wherever it is: blank
+// blocks exist only while you're on them. (Not undoable: undo puts back whole block states anyway.)
+function removeIfBlank(): void {
   const b = outline.get(props.id);
-  if (!b || b.content !== "" || b.parent !== null || outline.childIds(b.id).length > 0) return;
-  if (outline.childIds(topKey(b.page)).length === 1) commit({ upserts: [], deletes: [b.id] }, undefined, { record: false });
+  if (!b || !intents.isBlank(b.content) || outline.childIds(b.id).length > 0) return;
+  commit({ upserts: [], deletes: [b.id] }, undefined, { record: false });
 }
 
 onMounted(() => {
@@ -397,8 +416,12 @@ onMounted(() => {
   setActiveEditor(run);
 });
 onBeforeUnmount(() => {
+  // Moving to another block (arrows, a click, Enter) closes this editor, sometimes without a blur.
+  // Still on this block means it's only being re-rendered, after an indent say.
+  if (editing.id !== props.id) removeIfBlank();
   clearActiveEditor(run);
   clearTimeout(searchTimer);
+  document.removeEventListener("pointerdown", onOutsidePointer, true);
 });
 watch(() => editing.seq, () => nextTick(placeCaret));
 watch(content, (value) => {
@@ -438,7 +461,7 @@ watch(content, (value) => {
         @keydown.escape.prevent="cancelDate"
         @blur="onDateBlur"
       />
-      <button type="button" @click="confirmDate" @blur="onDateBlur">Insert</button>
+      <button type="button" @mousedown.prevent @click="confirmDate">Insert</button>
     </div>
     <ul
       v-else-if="suggestions.length > 0"

@@ -2,6 +2,7 @@ import { nextMarker, parseBlock, setMarker } from "../../../shared/blocktext";
 import { keyBetween, keysBetween } from "../../../shared/order";
 import type { Block } from "../../../shared/types";
 import { type Outline, parentKey } from "./outline";
+import { randomUUID } from "../uuid";
 
 // Editing operations as pure functions. Each looks at the outline and returns the blocks to
 // write (full new states) and to delete, plus where the caret goes next. Nothing here touches
@@ -23,7 +24,7 @@ export interface Change {
 }
 
 export function newBlock(page: string, parent: string | null, order_key: string, content = ""): Block {
-  return { id: crypto.randomUUID(), page, parent, order_key, content, collapsed: false, rev: 0 };
+  return { id: randomUUID(), page, parent, order_key, content, collapsed: false, rev: 0 };
 }
 
 // --- Finding neighbours ---------------------------------------------------------------------
@@ -83,6 +84,11 @@ export function firstBlock(page: string): Change {
   return { upserts: [block], deletes: [], caret: { id: block.id, offset: 0 } };
 }
 
+/** No text, or only spaces and line breaks: treated as an empty block everywhere. */
+export function isBlank(content: string): boolean {
+  return content.trim() === "";
+}
+
 export function setContent(o: Outline, id: string, content: string): Change | null {
   const b = o.get(id);
   if (!b || b.content === content) return null;
@@ -102,7 +108,7 @@ export function split(o: Outline, id: string, start: number, end: number, scope?
     return { upserts: [head, below], deletes: [], caret: { id: below.id, offset: 0 } };
   }
   // Enter in an empty nested block outdents it, as in Logseq.
-  if (b.content === "" && b.parent !== null) return outdent(o, id, 0);
+  if (isBlank(b.content) && b.parent !== null) return outdent(o, id, 0);
   // At the very start of a block with text: open an empty block above, and stay put.
   if (start === 0 && end === 0 && b.content !== "") {
     const above = newBlock(b.page, b.parent, keyBetween(previousSibling(o, b)?.order_key ?? null, b.order_key));
@@ -181,7 +187,7 @@ export function mergeWithPrevious(o: Outline, id: string, scope?: string | null)
   const b = o.get(id);
   const previous = previousVisible(o, id, scope);
   if (!b || !previous) return null;
-  if (b.content === "" && o.childIds(id).length === 0) {
+  if (isBlank(b.content) && o.childIds(id).length === 0) {
     return { upserts: [], deletes: [id], caret: { id: previous.id, offset: previous.content.length } };
   }
   return mergeInto(o, previous, b);

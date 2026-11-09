@@ -1,7 +1,7 @@
 import { type OutlineItem, writeOutline } from "../../../shared/markdownOutline";
 import { keysBetween } from "../../../shared/order";
 import type { Block } from "../../../shared/types";
-import { type Change, newBlock, nextSibling } from "./intents";
+import { type Change, isBlank, newBlock, nextSibling } from "./intents";
 import type { Outline } from "./outline";
 
 // Copying blocks as a markdown outline ("- item", two spaces per level) and pasting one back
@@ -34,7 +34,7 @@ export function insertOutline(o: Outline, id: string, pasted: OutlineItem[], sco
   let rest = pasted;
   let last: Block = target;
   let lastChildKey = o.get(o.childIds(id).at(-1) ?? "")?.order_key ?? null;
-  if (target.content === "") {
+  if (isBlank(target.content)) {
     last = { ...target, content: pasted[0].content };
     upserts.push(last);
     lastChildKey = add(pasted[0].children, id, lastChildKey, null);
