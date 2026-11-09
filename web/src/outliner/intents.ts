@@ -2,6 +2,7 @@ import { nextMarker, parseBlock, setMarker } from "../../../shared/blocktext";
 import { keyBetween, keysBetween } from "../../../shared/order";
 import type { Block } from "../../../shared/types";
 import { type Outline, parentKey } from "./outline";
+import { randomUUID } from "../uuid";
 
 // Editing operations as pure functions. Each looks at the outline and returns the blocks to
 // write (full new states) and to delete, plus where the caret goes next. Nothing here touches
@@ -23,7 +24,7 @@ export interface Change {
 }
 
 export function newBlock(page: string, parent: string | null, order_key: string, content = ""): Block {
-  return { id: crypto.randomUUID(), page, parent, order_key, content, collapsed: false, rev: 0 };
+  return { id: randomUUID(), page, parent, order_key, content, collapsed: false, rev: 0 };
 }
 
 // --- Finding neighbours ---------------------------------------------------------------------

@@ -1,6 +1,7 @@
 import { reactive } from "vue";
 import type { Batch, BatchResult, Op } from "../../shared/types";
 import { notify } from "./notices";
+import { randomUUID } from "./uuid";
 
 // Changes waiting to reach the server. Each op carries a block's full state, so only the latest
 // op per block matters and resending is always safe. The queue is kept in sessionStorage, so
@@ -180,11 +181,11 @@ function tabWriterId(): string {
   try {
     const saved = sessionStorage.getItem(WRITER_KEY);
     if (saved) return saved;
-    const id = crypto.randomUUID();
+    const id = randomUUID();
     sessionStorage.setItem(WRITER_KEY, id);
     return id;
   } catch {
-    return crypto.randomUUID();
+    return randomUUID();
   }
 }
 

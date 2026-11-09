@@ -1,6 +1,7 @@
 import { reactive } from "vue";
 import { outline, startEditing } from "../store";
 import { notify } from "../notices";
+import { randomUUID } from "../uuid";
 import { toMarkdown } from "./clipboard";
 import { indent, outdent } from "./intents";
 import { commit } from "./undo";
@@ -100,7 +101,7 @@ export function handleSelectionKey(event: KeyboardEvent): void {
       break;
     case "Tab": {
       // One block at a time, in order, undone as one step.
-      const group = crypto.randomUUID();
+      const group = randomUUID();
       for (const id of topLevel()) {
         const scope = scopeOnScreen(view, id);
         const change = event.shiftKey ? outdent(outline, id, 0, scope) : indent(outline, id, 0, scope);
