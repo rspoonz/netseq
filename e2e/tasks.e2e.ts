@@ -48,6 +48,34 @@ test("/scheduled picks a date, and an overdue task shows in today's agenda", asy
   await expect(page.locator(".agenda")).toContainText(task);
 });
 
+test("the date picker survives the field losing focus to nothing, as iPhones do", async ({ page }) => {
+  await openFreshPage(page);
+  await startWriting(page);
+  await page.keyboard.type("see /date");
+  await expect(page.getByRole("option", { name: "Date picker" })).toBeVisible();
+  await page.keyboard.press("Enter");
+
+  const date = page.getByLabel("Date picker");
+  await date.fill("2020-01-02");
+  await date.evaluate((el: HTMLElement) => el.blur()); // the picker's "Done"
+  await expect(date).toBeVisible();
+  await page.getByRole("button", { name: "Insert" }).click();
+  await expect(page.locator("textarea.block-editor")).toHaveValue("see [[2020-01-02]]");
+  await expectSaved(page);
+});
+
+test("tapping away from the date picker drops the typed command", async ({ page }) => {
+  await openFreshPage(page);
+  await startWriting(page);
+  await page.keyboard.type("see /date");
+  await page.keyboard.press("Enter");
+  await expect(page.getByLabel("Date picker")).toBeVisible();
+  await page.mouse.click(5, 5);
+  await expect(page.getByLabel("Date picker")).toBeHidden();
+  await expect(page.locator(".block-content").first()).toHaveText("see");
+  await expectSaved(page);
+});
+
 test("a query lists matching blocks from other pages, and keeps up with changes", async ({ page, request }) => {
   const tag = unique("proj").toLowerCase();
   await createPage(request, unique("Tasks"), [`TODO alpha [[${tag}]]`, `DONE beta [[${tag}]]`, "TODO gamma"]);

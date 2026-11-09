@@ -193,23 +193,41 @@ function confirmDate(): void {
   finishSlash(pending.q, pending.command, day.value);
 }
 
-function cancelDate(): void {
+/** Closes the date popup without a date, dropping the typed "/command". */
+function abandonDate(refocus: boolean): void {
   const pending = dating.value;
   const el = textarea.value;
   if (!pending || !el) return;
-  el.focus();
+  if (refocus) el.focus();
   dating.value = null;
-  // Drop the typed "/command".
   const change = intents.setContent(outline, props.id, el.value.slice(0, pending.q.start) + el.value.slice(pending.q.end));
-  if (change) commit(change, caret());
-  startEditing(props.view, props.id, pending.q.start);
+  if (change) commit(change, refocus ? caret() : undefined);
+  if (refocus) startEditing(props.view, props.id, pending.q.start);
 }
 
+function cancelDate(): void {
+  abandonDate(true);
+}
+
+// On iPhones, the date picker's "Done" blurs the field with nowhere for focus to go, and tapping
+// "Insert" doesn't focus the button, so a blur to nothing keeps the popup open. A tap outside
+// (below) or focus moving to something else closes it.
 function onDateBlur(event: FocusEvent): void {
-  if (focusStaysInside(event)) return;
-  dating.value = null;
+  if (event.relatedTarget === null || focusStaysInside(event)) return;
+  abandonDate(false);
   leave();
 }
+
+function onOutsidePointer(event: PointerEvent): void {
+  if (event.target instanceof Node && wrap.value?.contains(event.target)) return;
+  abandonDate(false);
+  leave();
+}
+
+watch(dating, (now, before) => {
+  if (now && !before) document.addEventListener("pointerdown", onOutsidePointer, true);
+  else if (!now && before) document.removeEventListener("pointerdown", onOutsidePointer, true);
+});
 
 // --- Editing --------------------------------------------------------------------------------
 
@@ -370,6 +388,7 @@ function focusStaysInside(event: FocusEvent): boolean {
 
 function onBlur(event: FocusEvent): void {
   if (focusStaysInside(event)) return; // into the date field
+  if (dating.value && event.relatedTarget === null) return; // see onDateBlur
   closeSuggestions();
   leave();
 }
@@ -399,6 +418,7 @@ onMounted(() => {
 onBeforeUnmount(() => {
   clearActiveEditor(run);
   clearTimeout(searchTimer);
+  document.removeEventListener("pointerdown", onOutsidePointer, true);
 });
 watch(() => editing.seq, () => nextTick(placeCaret));
 watch(content, (value) => {
@@ -438,7 +458,7 @@ watch(content, (value) => {
         @keydown.escape.prevent="cancelDate"
         @blur="onDateBlur"
       />
-      <button type="button" @click="confirmDate" @blur="onDateBlur">Insert</button>
+      <button type="button" @mousedown.prevent @click="confirmDate">Insert</button>
     </div>
     <ul
       v-else-if="suggestions.length > 0"
