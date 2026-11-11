@@ -42,3 +42,22 @@ test("the toolbar's ⋯ opens the block menu, which iPhones can't open by long-p
   await menu.getByRole("menuitem", { name: "Earlier versions" }).tap();
   await expect(page.getByRole("dialog", { name: "Earlier versions" })).toBeVisible();
 });
+
+test("☰ opens the favourites over the notes; picking one opens it and closes them", async ({ page, request }) => {
+  const name = `Phone favourite ${Date.now()}`;
+  expect((await request.put("/api/favourites", { data: { pages: [name] } })).ok()).toBe(true);
+  await page.goto("/");
+  const sidebar = page.getByRole("complementary", { name: "Favourites" });
+  await expect(sidebar).toHaveCount(0); // closed until asked for
+  await expect(page.locator(".topbar")).toBeInViewport({ ratio: 1 });
+
+  await page.getByRole("button", { name: "Favourites", exact: true }).tap();
+  await sidebar.getByRole("link", { name }).tap();
+  await expect(page.getByRole("heading", { level: 1 })).toHaveText(name);
+  await expect(sidebar).toHaveCount(0);
+
+  await page.getByRole("button", { name: "Remove from favourites" }).tap();
+  await page.getByRole("button", { name: "Favourites", exact: true }).tap();
+  await expect(sidebar).toContainText("Star a page");
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true); // nothing sticks out sideways
+});

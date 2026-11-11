@@ -4,10 +4,11 @@ import { join } from "node:path";
 import { writeOutline } from "../shared/markdownOutline";
 import { compareSiblings } from "../shared/order";
 import type { Block, PageSummary } from "../shared/types";
+import { getFavourites } from "./favourites";
 import { getPage } from "./read";
 
 // The notes as markdown files, in Logseq's layout: journals/2026_11_04.md and pages/<name>.md,
-// a tab per level. Written by `bun run export` (scripts/export.ts). Logseq compatibility is best
+// a tab per level, plus the favourites in logseq/config.edn. Written by `bun run export` (scripts/export.ts). Logseq compatibility is best
 // effort: it hasn't been tested against Logseq itself.
 
 export interface ExportResult {
@@ -53,6 +54,13 @@ export function exportMarkdown(db: Database, dir: string): ExportResult {
     used.add(file.toLowerCase());
     result.pages++;
     result.blocks += blocks.length;
+  }
+
+  // Favourites, where Logseq keeps them. JSON strings are also valid EDN strings.
+  const favourites = getFavourites(db).map((page) => JSON.stringify(page.key));
+  if (favourites.length > 0) {
+    mkdirSync(join(fresh, "logseq"));
+    writeFileSync(join(fresh, "logseq", "config.edn"), `{:favorites [${favourites.join(" ")}]}\n`);
   }
 
   rmSync(previous, { recursive: true, force: true });

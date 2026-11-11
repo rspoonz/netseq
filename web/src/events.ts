@@ -1,5 +1,6 @@
 import { ref } from "vue";
-import type { BatchResult } from "../../shared/types";
+import type { BatchResult, FavouritesChange } from "../../shared/types";
+import { applyFavouritesChange } from "./favourites";
 import { applyBatchResult, requestRefresh } from "./store";
 
 // Live updates from the server. EventSource reconnects by itself, but events sent while we were
@@ -17,6 +18,9 @@ export function startLiveUpdates(): void {
     source = new EventSource("/api/events");
     source.addEventListener("change", (event) => {
       applyBatchResult(JSON.parse((event as MessageEvent<string>).data) as BatchResult);
+    });
+    source.addEventListener("favourites", (event) => {
+      applyFavouritesChange(JSON.parse((event as MessageEvent<string>).data) as FavouritesChange);
     });
     source.onopen = () => {
       live.value = true;

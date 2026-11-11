@@ -77,6 +77,12 @@ export const MIGRATIONS: readonly string[] = [
   CREATE TABLE meta (key TEXT PRIMARY KEY, value INTEGER NOT NULL);
   INSERT INTO meta (key, value) VALUES ('rev', 0);
   `,
+  `
+  CREATE TABLE favourites (              -- the pages kept at hand, in the owner's order
+    page TEXT PRIMARY KEY REFERENCES pages(key) ON UPDATE CASCADE ON DELETE CASCADE,
+    position INTEGER NOT NULL
+  );
+  `,
 ];
 
 /** Opens (or creates) the database and brings its schema up to date. `migrations` is for tests. */

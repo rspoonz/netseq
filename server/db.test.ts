@@ -21,7 +21,7 @@ afterEach(() => {
 
 test("a new database is migrated to the latest schema", () => {
   const db = openDb(tempDbFile());
-  expect(schemaVersion(db)).toBe(1);
+  expect(schemaVersion(db)).toBe(MIGRATIONS.length);
   db.close();
 });
 
@@ -60,7 +60,7 @@ test("data survives closing and reopening the database", () => {
 
   const second = openDb(file);
   expect(second.query("SELECT name FROM pages").all()).toEqual([{ name: "Kept" }]);
-  expect(schemaVersion(second)).toBe(1);
+  expect(schemaVersion(second)).toBe(MIGRATIONS.length);
   second.close();
 });
 

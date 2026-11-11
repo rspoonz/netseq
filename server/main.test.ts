@@ -33,7 +33,7 @@ afterAll(() => stop());
 test("the health check reports the schema version", async () => {
   const res = await fetch(`${base}/api/healthz`);
   expect(res.status).toBe(200);
-  expect(await res.json()).toEqual({ ok: true, schema: 1 });
+  expect(await res.json()).toEqual({ ok: true, schema: 2 });
 });
 
 test("starting the server makes today's backup", () => {
@@ -166,10 +166,10 @@ test("/agents serves the agent guide as markdown, and every endpoint it lists ex
   expect(res.headers.get("content-type")).toBe("text/markdown; charset=utf-8");
   const guide = await res.text();
   expect(guide).toStartWith("# NetSeq: a guide for AI agents");
-  const endpoints = [...guide.matchAll(/`(GET|POST) (\/api\/[^`?\s]+)/g)].map((m) => [m[1], m[2]] as const);
+  const endpoints = [...guide.matchAll(/`(GET|POST|PUT) (\/api\/[^`?\s]+)/g)].map((m) => [m[1], m[2]] as const);
   expect(endpoints.length).toBeGreaterThanOrEqual(7);
   for (const [method, path] of endpoints) {
-    const init = method === "POST" ? { method, headers: { "content-type": "application/json" }, body: "{}" } : {};
+    const init = method !== "GET" ? { method, headers: { "content-type": "application/json" }, body: "{}" } : {};
     const answer = await (await fetch(`${base}${path}`, init)).text();
     expect(`${method} ${path}: ${answer}`).not.toContain('"not found"');
   }
@@ -211,6 +211,25 @@ test("agents add, edit and move blocks over HTTP; open tabs hear of it", async (
   const stale = await post("edit", { id: ids[0], content: "x", expect: "TODO first" });
   expect([stale.status, await stale.json()]).toEqual([409, { error: "the block has changed since you read it", content: "DONE first" }]);
   expect((await post("add", "not an object")).status).toBe(400);
+});
+
+test("favourites are set as one list; open tabs hear of it, and /llms.txt is the agent guide too", async () => {
+  const controller = new AbortController();
+  const events = (await fetch(`${base}/api/events`, { signal: controller.signal })).body!.getReader();
+  const put = (body: unknown) =>
+    fetch(`${base}/api/favourites`, { method: "PUT", headers: { "content-type": "application/json" }, body: JSON.stringify(body) });
+
+  const set = await put({ pages: ["Agent Notes", "Not written yet"] });
+  expect(set.status).toBe(200);
+  let text = "";
+  while (!text.includes("event: favourites")) text += new TextDecoder().decode((await events.read()).value);
+  controller.abort();
+  const list = (await (await fetch(`${base}/api/favourites`)).json()) as { name: string }[];
+  expect(list.map((page) => page.name)).toEqual(["Agent Notes", "Not written yet"]);
+
+  expect([(await put({ pages: "Agent Notes" })).status, (await put({ pages: [] })).status]).toEqual([400, 200]);
+  expect(await (await fetch(`${base}/api/favourites`)).json()).toEqual([]);
+  expect(await (await fetch(`${base}/llms.txt`)).text()).toStartWith("# NetSeq: a guide for AI agents");
 });
 
 test("the web app's page points agents to /agents", async () => {

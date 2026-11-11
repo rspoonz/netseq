@@ -8,6 +8,10 @@ Keys while editing: Enter splits a block, Shift+Enter adds a line, Tab and Shift
 
 Typing `/` offers commands: task markers, Scheduled and Deadline (with a date picker), links to today, tomorrow, yesterday or any date, and Query.
 
+## Favourites
+
+The ☆ beside a page's title makes it a favourite. Favourites are listed in the sidebar (☰ shows and hides it; on a phone it opens over your notes), and Ctrl+K lists them before you type, so Ctrl+K then Enter opens the first. Drag a favourite to reorder the list, or press Alt+↑ / Alt+↓ on it. The list is stored with your notes, so it's the same on every device.
+
 ## Block references
 
 Typing `((` and a few words searches blocks; picking one inserts a reference such as `((6f1c2a7e-…))`, which shows that block's first line, stays up to date when it changes, and zooms into it when clicked. Right-clicking a bullet offers "Copy block ref", to paste into any block. A block that's referenced shows how many blocks reference it; click the number to list them. A reference to a deleted block shows "missing block".
@@ -35,7 +39,7 @@ For example `{{query (and [[Project]] (task TODO DOING))}}`. Results show at mos
 
 ## AI agents
 
-`/agents` explains NetSeq and its API to AI agents. Give an agent NetSeq's address (the page there points it to the guide), or `http://localhost:8080/agents` itself, and ask it to look something up or add to your notes. Agents read pages as markdown outlines, add blocks with `/api/agent/add`, change a block's text with `/api/agent/edit` and move, indent or outdent blocks with `/api/agent/move`. They can't delete anything, and an agent's edit keeps the text it replaced in the block's history. The guide is [server/agents.md](server/agents.md).
+`/agents` explains NetSeq and its API to AI agents. Give an agent NetSeq's address (the page there points it to the guide), or `http://localhost:8080/agents` itself, and ask it to look something up or add to your notes. Agents read pages as markdown outlines, add blocks with `/api/agent/add`, change a block's text with `/api/agent/edit` and move, indent or outdent blocks with `/api/agent/move`. They can read and set your favourites, which tells them what matters to you. They can't delete anything, and an agent's edit keeps the text it replaced in the block's history. The guide is [server/agents.md](server/agents.md).
 
 ## Run it
 

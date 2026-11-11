@@ -11,6 +11,7 @@ NetSeq is a personal outliner, like Logseq, that holds one person's notes. Its o
 - **Tasks** start with `TODO`, `DOING`, `DONE`, `LATER`, `NOW`, `WAITING` or `CANCELED`. `[#A]`, `[#B]` or `[#C]` sets a priority. Dates go on their own lines in the block: `SCHEDULED: <2026-11-06 Fri>`, `DEADLINE: <2026-11-10 Tue>`.
 - **Properties** are lines like `status:: draft` in a block.
 - A block containing `{{query …}}` shows the blocks that match the query (syntax below).
+- **Favourites** are the pages the owner keeps at hand. They're a good first guess at what matters to them.
 
 ## Reading
 
@@ -20,6 +21,8 @@ NetSeq is a personal outliner, like Logseq, that holds one person's notes. Its o
 [{ "key": "project x", "name": "Project X", "journal_day": null },
  { "key": "2026-11-05", "name": "2026-11-05", "journal_day": 20261105 }]
 ```
+
+`GET /api/favourites`: the owner's favourite pages, in their order, in the same form. `GET /api/pages/recent`: the 20 named pages changed most recently, newest first (journal days left out).
 
 `GET /api/agent/page?name=<page name>`: the page as a markdown outline. It's empty for a page that exists only because something links to it, and 404 if there's no such page. Each `- ` starts a block, a tab per level, and a block's further lines are indented under its first. The `id::` line under each block is its id; `collapsed:: true` marks a folded block. Neither line is part of the block's text.
 
@@ -139,6 +142,8 @@ Outdenting `C` in the second outline gives the first result below, and `{"id": "
 A move is refused (400) if there's no block above to indent under, if the block is already at the top level for an outdent, or if it would go next to itself, under itself or under a block inside it. The answer is the block's id and the page it's on now: `{"id": "…", "page": "…"}`.
 
 `POST /api/rename`: renames a page and rewrites every link to it, `{"from": "Old name", "to": "New name"}`. It answers 409 if a page with the new name already exists.
+
+`PUT /api/favourites`: sets the favourites, `{"pages": ["Project X", "Reading list"]}`. This is the whole list in order, so read it first and send it back with your change: a page you leave out stops being a favourite. A page that doesn't exist yet is created. The answer has the new list under `favourites`.
 
 There's no delete. If something should go, tell the owner.
 

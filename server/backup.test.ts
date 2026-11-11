@@ -93,9 +93,10 @@ test("an existing database is backed up before a migration, and a new one isn't"
   upgraded.close();
   const [backup, ...more] = readdirSync(join(dir, "backups"));
   expect(more).toEqual([]);
-  expect(backup).toMatch(/^before-migration-v1-to-v2-\d{4}-\d{2}-\d{2}-\d{6}\.db$/);
+  expect(backup).toStartWith(`before-migration-v${MIGRATIONS.length}-to-v${MIGRATIONS.length + 1}-`);
+  expect(backup).toMatch(/-\d{4}-\d{2}-\d{2}-\d{6}\.db$/);
   const copy = new Database(join(dir, "backups", backup), { readonly: true });
-  expect(schemaVersion(copy)).toBe(1); // taken before the upgrade
+  expect(schemaVersion(copy)).toBe(MIGRATIONS.length); // taken before the upgrade
   copy.close();
   expect(blockCount(join(dir, "backups", backup))).toBe(1);
 

@@ -6,6 +6,7 @@ import { applyBatch, BadBatch, parseBatch, pruneHistory, renamePage } from "./ap
 import { dailyBackup } from "./backup";
 import { openDb, schemaVersion } from "./db";
 import { EventHub } from "./events";
+import { BadFavourites, getFavourites, setFavourites } from "./favourites";
 import { checkRequest, parseHosts, withSecurityHeaders } from "./guard";
 import { dayNumber, isJournalKey, journalName } from "../shared/names";
 import { pageNameProblem } from "../shared/refs";
@@ -83,8 +84,8 @@ const AGENT_GUIDE = join(import.meta.dir, "agents.md");
 async function route(req: Request, url: URL, db: Database, hub: EventHub, distDir: string): Promise<Response> {
   if (url.pathname.startsWith("/api/")) return api(req, url, db, hub);
   if (req.method !== "GET" && req.method !== "HEAD") return new Response("Method not allowed", { status: 405 });
-  // What NetSeq is and how to use its API, for AI agents.
-  if (url.pathname === "/agents") return markdown(Bun.file(AGENT_GUIDE));
+  // What NetSeq is and how to use its API, for AI agents (/llms.txt is where some of them look first).
+  if (url.pathname === "/agents" || url.pathname === "/llms.txt") return markdown(Bun.file(AGENT_GUIDE));
   return serveStatic(url.pathname, distDir);
 }
 
@@ -104,6 +105,18 @@ async function api(req: Request, url: URL, db: Database, hub: EventHub): Promise
       return Response.json(db.query("SELECT key, name, journal_day FROM pages ORDER BY key").all());
     case "GET /api/pages/recent":
       return Response.json(getRecentPages(db, RECENT_PAGES));
+    case "GET /api/favourites":
+      return Response.json(getFavourites(db));
+    case "PUT /api/favourites": {
+      try {
+        const change = setFavourites(db, await req.json().catch(() => null));
+        hub.publish("favourites", change);
+        return Response.json(change);
+      } catch (e) {
+        if (e instanceof BadFavourites) return badRequest(e.message);
+        throw e;
+      }
+    }
     case "GET /api/page": {
       const name = params.get("name");
       if (!name?.trim()) return badRequest("name is required");

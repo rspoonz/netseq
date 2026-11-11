@@ -7,6 +7,7 @@ import type { Op } from "../shared/types";
 import { applyBatch } from "./apply";
 import { openDb } from "./db";
 import { exportMarkdown, pageFile } from "./export";
+import { setFavourites } from "./favourites";
 import { blockOp, writer } from "./testing";
 
 let db: Database;
@@ -67,6 +68,15 @@ test("journal days go to journals/, and page names are made safe as file names",
   expect(page("Ålesund ✓")).toBe("pages/Ålesund ✓.md");
 });
 
+test("favourites are written where Logseq keeps them", () => {
+  apply(blockOp("a", "Keep", null, "a0"));
+  exportMarkdown(db, out);
+  expect(existsSync(join(out, "logseq"))).toBe(false); // nothing to write yet
+  setFavourites(db, { pages: ["Keep", 'Say "hi"'] });
+  exportMarkdown(db, out);
+  expect(readFileSync(join(out, "logseq", "config.edn"), "utf8")).toBe('{:favorites ["keep" "say \\"hi\\""]}\n');
+});
+
 test("each export replaces the last one: deleted pages disappear", () => {
   apply(blockOp("a", "Keep", null, "a0"), blockOp("b", "Gone", null, "a0"), blockOp("j", "2026-11-04", null, "a0"));
   exportMarkdown(db, out);
@@ -86,7 +96,7 @@ test("a page whose file name another page already took is skipped and reported",
   expect(result.pages).toBe(1);
   expect(result.skipped).toEqual([{ page: "a___b", reason: "another page is also written as pages/a___b.md" }]);
   expect(readFileSync(join(out, "pages", "A___B.md"), "utf8")).toBe("- slash\n");
-  expect(existsSync(join(out, "pages", "a___b.md"))).toBe(false);
+  expect(readdirSync(join(out, "pages"))).toEqual(["A___B.md"]); // (asking for a___b.md would find it where file names ignore case)
 });
 
 test("a page whose name is too long for a file name is skipped and reported, and the rest are written", () => {

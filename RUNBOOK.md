@@ -48,7 +48,7 @@ If you restore a before-migration backup with newer code, the server upgrades it
 
 ## Markdown export
 
-- **What it writes:** `bun run export` writes every page that has blocks to `data/export/`, in Logseq's layout: `journals/2026_11_04.md` and `pages/<name>.md`. It prints how many pages and blocks it wrote.
+- **What it writes:** `bun run export` writes every page that has blocks to `data/export/`, in Logseq's layout: `journals/2026_11_04.md` and `pages/<name>.md`, plus your favourites in `logseq/config.edn`. It prints how many pages and blocks it wrote.
 - **What it replaces:** each export replaces the previous one completely, so pages deleted since then disappear.
 - **Safe while the server runs.** It reads a consistent snapshot, which it deletes afterwards.
 - **One at a time.** Two exports at once can leave `data/export/` incomplete. Running it again fixes it.

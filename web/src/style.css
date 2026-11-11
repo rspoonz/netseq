@@ -12,6 +12,8 @@
   --highlight: #b5cbd2; /* lotusBlue2: search matches */
   accent-color: var(--accent); /* checkboxes */
   --title-size: 1.5rem; /* page titles, journal days, and the page-rename box */
+  --topbar-height: 3.5rem;
+  scroll-padding-top: var(--topbar-height); /* what's scrolled to doesn't hide under the top bar */
   font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
   line-height: 1.5;
 }
@@ -47,12 +49,42 @@ a:hover {
   text-decoration: underline;
 }
 
+/* The top bar stays in view, so search and the favourites are in reach however far down you are. */
 .topbar {
+  position: sticky;
+  top: 0;
+  z-index: 23; /* above the sidebar when it's open over the notes, so its shadow stays below the bar */
   display: flex;
   align-items: center;
   gap: 1.5rem;
-  padding: 0.75rem 1rem;
+  height: var(--topbar-height);
+  padding: 0 1rem;
   border-bottom: 1px solid var(--border);
+  background: var(--bg);
+}
+
+/* A button that is one symbol: the sidebar's ☰, a page's ☆. */
+.icon-button {
+  flex: none;
+  width: 2.25rem;
+  height: 2.25rem;
+  padding: 0;
+  border: 0;
+  border-radius: 0.375rem;
+  background: none;
+  color: var(--muted);
+  font: inherit;
+  font-size: 1.25rem;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.icon-button:hover {
+  color: var(--fg);
+}
+
+.sidebar-toggle {
+  margin: 0 -0.5rem; /* the symbol lines up with the edge, and the gap to the next thing stays even */
 }
 
 .topbar .brand {
@@ -82,10 +114,100 @@ a:hover {
   border-bottom-color: var(--accent);
 }
 
+.layout {
+  display: flex;
+  align-items: flex-start;
+}
+
 .content {
+  flex: 1;
+  min-width: 0;
   max-width: 46rem;
   margin: 0 auto;
   padding: 1.5rem 1rem 4rem;
+}
+
+/* The sidebar: beside the notes on a wide window, over them on a narrow one (see sidebar.ts). */
+.sidebar {
+  position: sticky;
+  top: var(--topbar-height);
+  flex: none;
+  width: 14rem;
+  height: calc(100vh - var(--topbar-height));
+  padding: 1.5rem 1rem;
+  overflow-y: auto;
+  border-right: 1px solid var(--border);
+  background: var(--bg);
+}
+
+.sidebar-hint {
+  margin: 0;
+  font-size: 0.9rem;
+}
+
+.favourites {
+  margin: 0 -0.5rem;
+  padding: 0;
+  list-style: none;
+}
+
+.favourites a {
+  display: block;
+  padding: 0.3rem 0.5rem;
+  border-radius: 0.375rem;
+  color: var(--fg);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums; /* journal days */
+}
+
+.favourites a:hover {
+  background: color-mix(in srgb, var(--accent) 7%, transparent);
+  text-decoration: none;
+}
+
+.favourites a[aria-current="page"] {
+  background: color-mix(in srgb, var(--accent) 15%, transparent);
+}
+
+/* Where a dragged favourite would land */
+.favourites .drop-before {
+  box-shadow: inset 0 2px 0 var(--accent);
+}
+
+.favourites .drop-after {
+  box-shadow: inset 0 -2px 0 var(--accent);
+}
+
+.sidebar-backdrop {
+  position: fixed;
+  inset: var(--topbar-height) 0 0;
+  z-index: 21;
+  background: rgb(0 0 0 / 0.3);
+}
+
+@media (max-width: 59.99rem) {
+  .sidebar {
+    position: fixed;
+    bottom: 0;
+    left: 0;
+    z-index: 22;
+    width: min(18rem, 85vw);
+    height: auto;
+    box-shadow: 0 0.5rem 2rem rgb(0 0 0 / 0.25);
+  }
+}
+
+/* A phone has room for the tabs or the name, not both. */
+@media (max-width: 30rem) {
+  .topbar {
+    gap: 1rem;
+  }
+
+  .topbar .brand {
+    display: none;
+  }
 }
 
 /* A page's title, and each day's on the Journals tab: a day looks the same there as on its own page. */
@@ -93,6 +215,26 @@ h1,
 .journal-day h2 {
   font-size: var(--title-size);
   margin: 0 0 1rem;
+}
+
+/* A page's title with its ☆ beside it, which stays on the title's first line. */
+.page-title {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.5rem;
+  margin-bottom: 1rem;
+}
+
+.page-title h1,
+.page-title .page-title-input {
+  flex: 1;
+  min-width: 0;
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
+.star[aria-pressed="true"] {
+  color: var(--accent);
 }
 
 .muted {
@@ -129,8 +271,12 @@ h1,
 
 .sync {
   margin-left: auto;
+  min-width: 0;
   font-size: 0.85rem;
   color: var(--muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .sync.offline,
@@ -292,6 +438,10 @@ h1,
 
   .block-toggle {
     opacity: 1; /* there's no hover to reveal it */
+  }
+
+  .favourites a {
+    padding: 0.6rem 0.5rem; /* room for a thumb */
   }
 }
 
@@ -670,7 +820,8 @@ h1.renamable {
 }
 
 .agenda h2,
-.unlinked-refs h2 {
+.unlinked-refs h2,
+.sidebar h2 {
   font-size: 1rem;
   color: var(--muted);
   margin: 0 0 0.5rem;

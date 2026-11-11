@@ -52,6 +52,13 @@ export interface BatchResult {
   renamed?: { from: string; to: string }; // a rename: the old page key, and the new name
 }
 
+/** The favourites after a change to them, with the pages that change created or removed. */
+export interface FavouritesChange {
+  favourites: PageSummary[]; // in the owner's order
+  pages: PageSummary[]; // pages created: a page can be a favourite before anything is written on it
+  removedPages: string[]; // keys of unused pages that stopped being favourites
+}
+
 export interface Overwrite {
   block: string;
   device: string | null; // the device whose text was replaced
