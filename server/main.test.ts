@@ -63,6 +63,14 @@ test("routes inside the app get index.html, with security headers", async () => 
   expect(res.headers.get("content-security-policy")).toContain("default-src 'self'");
 });
 
+test("a missing file is a 404, but a page name with a dot in it is still the app", async () => {
+  expect((await fetch(`${base}/apple-touch-icon-precomposed.png`)).status).toBe(404);
+  expect((await fetch(`${base}/assets/gone.js`)).status).toBe(404);
+  const page = await fetch(`${base}/page/notes.md`);
+  expect(page.status).toBe(200);
+  expect(await page.text()).toContain("<title>NetSeq</title>");
+});
+
 test("hashed assets are cached for a long time", async () => {
   const res = await fetch(`${base}/assets/app-abc123.js`);
   expect(await res.text()).toBe("console.log('app')");
@@ -72,7 +80,8 @@ test("hashed assets are cached for a long time", async () => {
 test("files outside the build folder are never served", async () => {
   // Decodes to /../data/netseq.db, which exists next to the build folder in this test.
   const res = await fetch(`${base}/..%2fdata%2fnetseq.db`);
-  expect(await res.text()).toContain("<title>NetSeq</title>");
+  expect(res.status).toBe(404);
+  expect(await res.text()).toBe("Not found");
 });
 
 test("writes must be JSON", async () => {
