@@ -6,6 +6,11 @@ export interface PageSummary {
   journal_day: number | null;
 }
 
+/** A named page with when it last changed, for the Pages tab. */
+export interface RecentPage extends PageSummary {
+  changed: number; // when one of its blocks was last saved, or the page was created if it has none (ms)
+}
+
 /** A block, as the server stores it and the browser holds it. */
 export interface Block {
   id: string;

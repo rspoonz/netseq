@@ -56,6 +56,18 @@ test("☰ opens the favourites over the notes; picking one opens it and closes t
   await expect(page.getByRole("heading", { level: 1 })).toHaveText(name);
   await expect(sidebar).toHaveCount(0);
 
+  // Going anywhere else closes them too: a tab, even the one already open.
+  for (const tab of ["Pages", "Pages", "Journals"]) {
+    await page.getByRole("button", { name: "Favourites", exact: true }).tap();
+    await expect(sidebar).toBeVisible();
+    await page.locator(".topbar").getByRole("link", { name: tab, exact: true }).tap();
+    await expect(sidebar).toHaveCount(0);
+  }
+
+  await page.goto("/pages"); // on a phone a page's name gets the whole line: no date beside it
+  await expect(page.locator(".page-list a").first()).toBeVisible();
+  await expect(page.locator(".page-list time").first()).toBeHidden();
+  await page.goto(`/page/${encodeURIComponent(name)}`);
   await page.getByRole("button", { name: "Remove from favourites" }).tap();
   await page.getByRole("button", { name: "Favourites", exact: true }).tap();
   await expect(sidebar).toContainText("Star a page");

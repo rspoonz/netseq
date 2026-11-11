@@ -24,7 +24,7 @@ If you speak the Model Context Protocol, everything here is also offered as tool
  { "key": "2026-11-05", "name": "2026-11-05", "journal_day": 20261105 }]
 ```
 
-`GET /api/favourites`: the owner's favourite pages, in their order, in the same form. `GET /api/pages/recent`: the 20 named pages changed most recently, newest first (journal days left out).
+`GET /api/favourites`: the owner's favourite pages, in their order, in the same form. `GET /api/pages/recent`: the 20 named pages changed most recently, newest first (journal days left out; `?limit=100` for more). `changed` is when, in milliseconds since 1970.
 
 `GET /api/agent/page?name=<page name>`: the page as a markdown outline. It's empty for a page that exists only because something links to it, and 404 if there's no such page. Each `- ` starts a block, a tab per level, and a block's further lines are indented under its first. The `id::` line under each block is its id; `collapsed:: true` marks a folded block. Neither line is part of the block's text.
 

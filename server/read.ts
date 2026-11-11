@@ -1,6 +1,6 @@
 import type { Database } from "bun:sqlite";
 import { pageKey } from "../shared/names";
-import type { Block, BlockTree, Crumb, HistoryEntry, PageData, PageSummary, RefGroup } from "../shared/types";
+import type { Block, BlockTree, Crumb, HistoryEntry, PageData, PageSummary, RecentPage, RefGroup } from "../shared/types";
 
 export const BLOCK_COLUMNS =
   "id, page, parent, order_key, content, collapsed, rev, (SELECT count(*) FROM block_refs WHERE target = blocks.id) AS ref_count";
@@ -36,22 +36,23 @@ export function getJournals(db: Database, before: number, limit: number): PageDa
   return pages.map((page) => ({ page, blocks: blocksOf(db, page.key), rev }));
 }
 
-/** How many pages the Pages tab shows before you filter. */
+/** How many recently changed pages agents get unless they ask for more. */
 export const RECENT_PAGES = 20;
 
 /**
  * Named pages, the most recently changed first: the time the server last saved one of their
- * blocks. Journal days are left out (the Journals tab has them), and so are pages with no blocks.
+ * blocks, or for a page with nothing written on it (one that's only linked to, say), the time it
+ * was created. Journal days are left out: the Journals tab has them.
  */
-export function getRecentPages(db: Database, limit: number): PageSummary[] {
+export function getRecentPages(db: Database, limit: number): RecentPage[] {
   return db
     .query(
-      `SELECT p.key, p.name, p.journal_day
-       FROM pages p JOIN (SELECT page, max(updated_at) AS changed FROM blocks GROUP BY page) b ON b.page = p.key
-       WHERE p.journal_day IS NULL
-       ORDER BY b.changed DESC, p.key LIMIT ?`,
+      `SELECT key, name, journal_day,
+              coalesce((SELECT max(updated_at) FROM blocks WHERE page = pages.key), created_at) AS changed
+       FROM pages WHERE journal_day IS NULL
+       ORDER BY changed DESC, key LIMIT ?`,
     )
-    .all(limit) as PageSummary[];
+    .all(limit) as RecentPage[];
 }
 
 function blocksOf(db: Database, key: string): Block[] {

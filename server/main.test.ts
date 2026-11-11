@@ -250,6 +250,14 @@ test("/mcp answers MCP clients over HTTP, as a client sends its requests", async
   expect(crossSite.status).toBe(403); // a website open in the same browser can't call tools
 });
 
+test("recently changed pages come 20 at a time unless more are asked for", async () => {
+  const ops = Array.from({ length: 25 }, (_, i) => blockOp(`many-${i}`, `Many ${i}`, null, "a0"));
+  await fetch(`${base}/api/batch`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ writer: "t", device: "T", ops }) });
+  const count = async (query: string) => ((await (await fetch(`${base}/api/pages/recent${query}`)).json()) as unknown[]).length;
+  expect([await count(""), await count("?limit=3"), await count("?limit=nonsense")]).toEqual([20, 3, 20]);
+  expect(await count("?limit=5000")).toBeGreaterThanOrEqual(25);
+});
+
 test("the web app's page points agents to /agents", async () => {
   const html = await Bun.file(join(import.meta.dir, "..", "web", "index.html")).text();
   expect(html).toContain('<link rel="help" type="text/markdown" href="/agents" />');

@@ -85,7 +85,7 @@ test("an agent finds its way around: pages, a page, a block, search and a query"
   await call("set_favourites", { pages: ["Project"] });
   expect(JSON.parse((await call("list_pages")).text)).toEqual({
     favourites: ["Project"],
-    recently_changed: ["Project"],
+    recently_changed: ["Alice", "Project"],
     pages: ["Alice", "Project"],
     journal_days: { count: 1, first: "2026-11-05", last: "2026-11-05" },
   });

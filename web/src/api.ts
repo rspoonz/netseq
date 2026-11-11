@@ -1,5 +1,5 @@
 import { dayNumber, journalName } from "../../shared/names";
-import type { BatchResult, BlockTree, PageData, PageSummary, QueryResult, RefGroup, SearchHit } from "../../shared/types";
+import type { BatchResult, BlockTree, PageData, QueryResult, RecentPage, RefGroup, SearchHit } from "../../shared/types";
 import { drain } from "./outbox";
 
 // Small helpers for talking to the NetSeq server. Block edits go through the outbox instead.
@@ -14,9 +14,9 @@ export function fetchPage(name: string): Promise<PageData> {
   return getJSON(`/api/page?name=${encodeURIComponent(name)}`);
 }
 
-/** Named pages, the most recently changed first (the server decides how many). */
-export function fetchRecentPages(): Promise<PageSummary[]> {
-  return getJSON("/api/pages/recent");
+/** The `limit` named pages changed most recently, newest first. */
+export function fetchRecentPages(limit: number): Promise<RecentPage[]> {
+  return getJSON(`/api/pages/recent?limit=${limit}`);
 }
 
 /** Journal pages for days before `before` (yyyymmdd), newest first. */

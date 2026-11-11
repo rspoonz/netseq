@@ -107,7 +107,7 @@ async function api(req: Request, url: URL, db: Database, hub: EventHub): Promise
     case "GET /api/pages":
       return Response.json(db.query("SELECT key, name, journal_day FROM pages ORDER BY key").all());
     case "GET /api/pages/recent":
-      return Response.json(getRecentPages(db, RECENT_PAGES));
+      return Response.json(getRecentPages(db, Math.min(5000, Math.max(1, Number(params.get("limit")) || RECENT_PAGES))));
     case "GET /api/favourites":
       return Response.json(getFavourites(db));
     case "PUT /api/favourites": {

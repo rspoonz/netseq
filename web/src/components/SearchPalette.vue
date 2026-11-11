@@ -28,7 +28,7 @@ let latest = 0;
 const items = computed((): Item[] => {
   const q = query.value.trim();
   if (!q) return favourites.value.map((page) => ({ kind: "favourite", name: page.name }));
-  const names = matchPages([...pages.values()].map((page) => page.name), q, 5);
+  const names = matchPages([...pages.values()].map((page) => page.name), q, 10);
   const list: Item[] = names.map((name) => ({ kind: "page", name }));
   for (const hit of hits.value) list.push({ kind: "block", hit });
   if (!pages.has(pageKey(q))) list.push({ kind: "new", name: q });

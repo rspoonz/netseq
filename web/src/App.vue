@@ -1,6 +1,6 @@
 <script setup lang="ts">
-import { computed, onBeforeUnmount, onMounted } from "vue";
-import { RouterLink, RouterView } from "vue-router";
+import { computed, onBeforeUnmount, onMounted, watch } from "vue";
+import { RouterLink, RouterView, useRouter } from "vue-router";
 import History from "./components/History.vue";
 import Notices from "./components/Notices.vue";
 import SearchPalette from "./components/SearchPalette.vue";
@@ -16,6 +16,11 @@ import { clearSelection, handleSelectionKey, selection } from "./outliner/select
 import { redo, undo } from "./outliner/undo";
 import { palette } from "./palette";
 import { closeDrawer, drawerOpen, sidebarOpen, toggleSidebar } from "./sidebar";
+
+// The favourites, when open over the notes (on a phone), close once you go anywhere: a tab (even
+// the one you're on, which isn't a navigation), a search result, or search itself.
+useRouter().afterEach(closeDrawer);
+watch(() => palette.open, closeDrawer);
 
 function clearSelectionOnClick(): void {
   if (selection.ids.length > 0) clearSelection();
@@ -94,7 +99,7 @@ const syncLabel = computed(() => {
       ☰
     </button>
     <span class="brand">NetSeq</span>
-    <nav>
+    <nav @click="closeDrawer">
       <RouterLink to="/">Journals</RouterLink>
       <RouterLink to="/pages">Pages</RouterLink>
     </nav>

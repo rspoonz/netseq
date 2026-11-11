@@ -69,15 +69,16 @@ describe("references", () => {
 describe("recently changed pages", () => {
   const at = (now: number, ...ops: Op[]) => applyBatch(db, { ...writer, ops }, now);
 
-  test("named pages with blocks, the most recently changed first", () => {
+  test("named pages, the most recently changed first; a page with no blocks counts from when it was created", () => {
     at(1000, blockOp("a", "Alpha", null, "a0"));
     at(2000, blockOp("b", "Beta", null, "a0", { content: "see [[Only linked]]" }), blockOp("j", "2026-11-01", null, "a0"));
     expect(getRecentPages(db, 10)).toEqual([
-      { key: "beta", name: "Beta", journal_day: null },
-      { key: "alpha", name: "Alpha", journal_day: null },
-    ]); // no journal day, no "Only linked" (it has no blocks)
+      { key: "beta", name: "Beta", journal_day: null, changed: 2000 },
+      { key: "only linked", name: "Only linked", journal_day: null, changed: 2000 },
+      { key: "alpha", name: "Alpha", journal_day: null, changed: 1000 },
+    ]); // no journal day
     at(3000, blockOp("a", "Alpha", null, "a0", { content: "edited", base: 1 }));
-    expect(getRecentPages(db, 10).map((p) => p.name)).toEqual(["Alpha", "Beta"]);
+    expect(getRecentPages(db, 10).map((p) => p.name)).toEqual(["Alpha", "Beta", "Only linked"]);
   });
 
   test("only the `limit` most recent, ties in name order", () => {

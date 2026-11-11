@@ -66,7 +66,6 @@ async function onKeydown(index: number, event: KeyboardEvent): Promise<void> {
         <RouterLink
           :to="{ name: 'page', params: { name: page.name } }"
           draggable="false"
-          @click="closeDrawer"
           @keydown="onKeydown(index, $event)"
         >
           {{ journalTitle(page.name) }}
