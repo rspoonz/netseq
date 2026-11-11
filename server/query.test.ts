@@ -83,6 +83,81 @@ describe("filters", () => {
   });
 });
 
+describe("anniversaries", () => {
+  beforeEach(() => {
+    apply(
+      blockOp("w1", "1990-11-20", null, "a0", { content: "wedding\nevent:: married" }),
+      blockOp("b1", "1985-12-28", null, "a0", { content: "[[Amelia]]\nevent:: born" }),
+      blockOp("b2", "2001-01-05", null, "a0", { content: "[[Alma]]\nevent:: born" }),
+      blockOp("b3", "1996-02-29", null, "a0", { content: "[[Leap]]\nevent:: born" }),
+      blockOp("b4", "1970-06-15", null, "a0", { content: "[[Summer]]\nevent:: born\nended:: yes" }),
+      blockOp("n1", "2026-11-10", null, "a0", { content: "this year\nevent:: born" }),
+      blockOp("n2", "2027-11-10", null, "a0", { content: "next year\nevent:: born" }),
+    );
+  });
+
+  const events = (window: string) => find(`(property event) (anniversary ${window})`).sort();
+
+  test("a range within one calendar year", () => {
+    expect(events("today +30d")).toEqual(["w1"]);
+    expect(events("+30d today")).toEqual(["w1"]); // either way round
+    expect(events("2026-12-28 2026-12-28")).toEqual(["b1"]);
+    expect(events("2026-12-29 2026-12-31")).toEqual([]);
+  });
+
+  test("a range crossing New Year", () => {
+    expect(events("today +70d")).toEqual(["b1", "b2", "w1"]); // 3 Nov to 12 Jan
+    expect(events("2026-12-01 2027-01-04")).toEqual(["b1"]);
+  });
+
+  test("a range of a year or more matches every day", () => {
+    expect(events("today +1y")).toEqual(["b1", "b2", "b3", "b4", "w1"]);
+    expect(events("2026-11-03 2027-11-02")).toEqual(["b1", "b2", "b3", "b4", "w1"]); // a day short, but still every day
+    expect(events("2026-11-04 2027-11-02")).toEqual(["b1", "b2", "b3", "b4", "w1"]);
+    expect(events("2026-11-21 2027-11-19")).toEqual(["b1", "b2", "b3", "b4", "n1"]); // misses 20 Nov; n1 is now before the range
+  });
+
+  test("days in the range itself, and after it, are left out", () => {
+    // n1 (2026-11-10) is inside the range and n2 is in the future; m1, m2, m3 (2026-11-02) are a day before it.
+    expect(find("(anniversary today +30d)")).toEqual(["w1"]);
+    expect(find("(anniversary 2027-11-01 2027-11-30)").sort()).toEqual(["m1", "m3", "n1", "w1"]);
+  });
+
+  test("29 February in a year without one", () => {
+    expect(events("2027-02-20 2027-03-05")).toEqual(["b3"]);
+    expect(events("2027-02-28 2027-03-01")).toEqual(["b3"]);
+    expect(events("2027-02-20 2027-02-28")).toEqual([]); // ends on the 28th: not counted
+    expect(events("2028-02-29 2028-02-29")).toEqual(["b3"]);
+  });
+
+  test("the results come soonest first", () => {
+    const pages = (query: string) => runQuery(db, query, TODAY, null).groups.map((group) => group.page.key);
+    apply(blockOp("w2", "1975-11-20", null, "a0", { content: "an older wedding\nevent:: married" }));
+    // By month and day, not by year; the same day in two years goes oldest first.
+    expect(pages("(property event) (anniversary today +60d)")).toEqual(["1975-11-20", "1990-11-20", "1985-12-28"]);
+    // Across New Year, December comes before January.
+    expect(pages("(property event) (anniversary today +70d)")).toEqual(["1975-11-20", "1990-11-20", "1985-12-28", "2001-01-05"]);
+    // A year from today starts with today's month and day, wherever the year begins.
+    expect(pages("(property event born) (anniversary today +1y)")).toEqual(["1985-12-28", "2001-01-05", "1996-02-29", "1970-06-15"]);
+    // Pages that aren't journal days come last.
+    expect(pages('(or (and (property event) (anniversary today +60d)) (page "Project"))')).toEqual([
+      "1975-11-20",
+      "1990-11-20",
+      "1985-12-28",
+      "project",
+    ]);
+  });
+
+  test("combined with other filters", () => {
+    expect(find("(and (property event born) (anniversary today +1y))").sort()).toEqual(["b1", "b2", "b3", "b4"]);
+    expect(find("(property event) (not (property event born)) (anniversary today +1y)")).toEqual(["w1"]);
+    expect(find("(property event born) (not (property ended)) (anniversary 2027-06-01 2027-06-30)")).toEqual([]);
+    expect(find("[[Alma]] (anniversary today +70d)")).toEqual(["b2"]);
+    expect(find("(or (property event married) [[Alma]]) (anniversary today +70d)").sort()).toEqual(["b2", "w1"]);
+    expect(find('(anniversary today +1y) (page "Project")')).toEqual([]); // blocks on ordinary pages never match
+  });
+});
+
 describe("parsing", () => {
   test("mistakes come back as readable errors", () => {
     for (const [query, message] of [
@@ -94,6 +169,10 @@ describe("parsing", () => {
       ["(priority D)", "(priority) takes A, B or C."],
       ["(between today)", "Expected an end date."],
       ["(between soon today)", '"soon" isn\'t a date: use today, -7d, +2w, 2026-11-02 and the like.'],
+      ["(anniversary)", "Expected a start date."],
+      ["(anniversary today)", "Expected an end date."],
+      ["(anniversary today soon)", '"soon" isn\'t a date: use today, -7d, +2w, 2026-11-02 and the like.'],
+      ["(anniversary today +60d +90d)", "A ( isn't closed."],
       ["", "The query is empty."],
       ["(and)", "(and) needs something to combine."],
     ]) {

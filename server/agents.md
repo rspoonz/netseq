@@ -53,6 +53,7 @@ If you speak the Model Context Protocol, everything here is also offered as tool
 | `(property status draft)` | with the property (and value) |
 | `(page "name")` | on the page |
 | `(between -7d today)` | on journal days in the range: `today`, `yesterday`, `tomorrow`, `-7d`, `+2w`, `-1m`, `-1y`, `2026-11-02` |
+| `(anniversary today +60d)` | on journal days in earlier years whose month and day fall in the range: birthdays and the like, soonest first. Same dates as `(between …)` |
 | `(and …)` `(or …)` `(not …)` | combining the above; terms side by side mean "and" |
 
 For example `(and [[Project X]] (task TODO DOING))`. To find blocks about a topic, use `[[topic]]` rather than a word: a word only matches a block's own text, while `[[topic]]` also finds the blocks nested under one that links to it.

@@ -33,6 +33,7 @@ A block containing `{{query …}}` shows the matching blocks below it, editable 
 | `(property status draft)` | with the property (and value) |
 | `(page "name")` | on the page |
 | `(between -7d today)` | on journal days in the range: `today`, `yesterday`, `tomorrow`, `-7d`, `+2w`, `-1m`, `-1y`, `2026-11-02` |
+| `(anniversary today +60d)` | on journal days in earlier years whose month and day fall in the range: birthdays and the like, soonest first. Same dates as `(between …)` |
 | `(and …)` `(or …)` `(not …)` | combining the above; terms side by side mean "and" |
 
 For example `{{query (and [[Project]] (task TODO DOING))}}`. Results show at most 500 blocks.
