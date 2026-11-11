@@ -4,14 +4,17 @@ import { useRouter } from "vue-router";
 import { journalTitle, pageKey } from "../../../shared/names";
 import type { SearchHit } from "../../../shared/types";
 import { fetchSearch } from "../api";
+import { favourites } from "../favourites";
 import { matchPages } from "../outliner/autocomplete";
 import { palette, segments } from "../palette";
 import { pages } from "../store";
 
 // Search pages (by name, in the browser) and blocks (by text, on the server). Opening a block
-// zooms into it.
+// zooms into it. Before anything is typed it lists the favourites, so Ctrl+K then Enter (or a
+// few ↓) opens one.
 
-type Item = { kind: "page" | "new"; name: string } | { kind: "block"; hit: SearchHit };
+type Item = { kind: "favourite" | "page" | "new"; name: string } | { kind: "block"; hit: SearchHit };
+const KINDS = { favourite: "Favourite", page: "Page", new: "New page" };
 
 const router = useRouter();
 const input = ref<HTMLInputElement>();
@@ -24,8 +27,8 @@ let latest = 0;
 
 const items = computed((): Item[] => {
   const q = query.value.trim();
-  if (!q) return [];
-  const names = matchPages([...pages.values()].map((page) => page.name), q, 5);
+  if (!q) return favourites.value.map((page) => ({ kind: "favourite", name: page.name }));
+  const names = matchPages([...pages.values()].map((page) => page.name), q, 10);
   const list: Item[] = names.map((name) => ({ kind: "page", name }));
   for (const hit of hits.value) list.push({ kind: "block", hit });
   if (!pages.has(pageKey(q))) list.push({ kind: "new", name: q });
@@ -127,7 +130,7 @@ function onKeydown(event: KeyboardEvent): void {
             </span>
           </template>
           <template v-else>
-            <span class="palette-kind">{{ item.kind === "new" ? "New page" : "Page" }}</span>
+            <span class="palette-kind">{{ KINDS[item.kind] }}</span>
             <span>{{ journalTitle(item.name) }}</span>
           </template>
         </li>

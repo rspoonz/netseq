@@ -1,82 +1,79 @@
 <script setup lang="ts">
-import { computed, ref } from "vue";
+import { computed, nextTick, onBeforeUnmount, onMounted, ref } from "vue";
 import { RouterLink } from "vue-router";
-import { journalTitle } from "../../../shared/names";
-import type { PageSummary } from "../../../shared/types";
+import { journalName, journalTitle } from "../../../shared/names";
 import { fetchRecentPages } from "../api";
 import { useLiveData } from "../outliner/liveData";
-import { pages, pagesLoaded } from "../store";
+import { pages } from "../store";
 
-// Opens on the named pages changed most recently, because a list of every page stops being useful
-// once there are hundreds (journal days are left out: the Journals tab has them). Typing in the
-// filter, or "Show all", lists every page from the list the app already keeps up to date: named
-// pages A–Z, then journal days newest first, so the dates don't crowd out the rest. One filter
-// covers both; for a day it matches the date and weekday as shown ("2026-11", "tue").
-const filter = ref("");
-const showAll = ref(false);
-const all = computed(() => [...pages.values()]);
-const named = computed(() => all.value.filter((page) => page.journal_day === null).sort((a, b) => (a.key < b.key ? -1 : 1)));
-const days = computed(() => all.value.filter((page) => page.journal_day !== null).sort((a, b) => b.journal_day! - a.journal_day!));
+// Every named page, the most recently changed first, more as you scroll, set like the notes on
+// the Journals tab (the same bullets and line height). The day each last changed is beside it
+// where there's room, so not on a phone. There's nothing to filter with here: search (Ctrl+K)
+// finds a page by name from anywhere. However far you've scrolled, a reload is one request for
+// the pages on screen.
 
-// Reloaded a moment after any change, here or on another device.
-const { data: recentData, failed: recentFailed, load } = useLiveData({ view: () => "all-pages", fetch: fetchRecentPages, groups: () => [] });
-void load();
-const recent = computed(() => (recentData.value ?? []).map((page) => pages.get(page.key) ?? page)); // a rename shows straight away
+const BATCH = 50;
+const limit = ref(BATCH);
+const sentinel = ref<HTMLElement>();
+const { data, failed, load } = useLiveData({ view: () => "all-pages", fetch: () => fetchRecentPages(limit.value), groups: () => [] });
+// A rename shows straight away, from the list the app keeps up to date.
+const list = computed(() => (data.value ?? []).map((page) => ({ ...page, name: pages.get(page.key)?.name ?? page.name })));
+const more = computed(() => data.value !== null && data.value.length >= limit.value);
 
-const words = computed(() => filter.value.normalize("NFC").toLowerCase().split(/\s+/).filter(Boolean));
-// Every page once you filter or ask for it, and when nothing has been written on a named page yet.
-const listAll = computed(() => showAll.value || words.value.length > 0 || recentData.value?.length === 0);
-function matches(page: PageSummary): boolean {
-  const text = page.journal_day === null ? page.key : journalTitle(page.name).toLowerCase();
-  return words.value.every((word) => text.includes(word));
+/** The day a page last changed, written like a journal day. */
+function day(changed: number): string {
+  return journalTitle(journalName(new Date(changed)));
 }
-const shownNamed = computed(() => named.value.filter(matches));
-const shownDays = computed(() => days.value.filter(matches));
 
-function count(shown: number, total: number, one: string, many: string): string {
-  const noun = total === 1 ? one : many;
-  return words.value.length > 0 ? `${shown} of ${total} ${noun}` : `${total} ${noun}`;
+let loadingMore = false;
+
+async function loadMore(): Promise<void> {
+  if (loadingMore || !more.value || failed.value) return;
+  loadingMore = true;
+  limit.value += BATCH;
+  await load();
+  loadingMore = false;
+  await fill();
 }
+
+// The observer only fires on changes, so keep going while the end of the list is still in view.
+async function fill(): Promise<void> {
+  await nextTick();
+  if (sentinel.value && sentinel.value.getBoundingClientRect().top < window.innerHeight) void loadMore();
+}
+
+async function retry(): Promise<void> {
+  await load();
+  await fill();
+}
+
+let observer: IntersectionObserver | undefined;
+
+onMounted(async () => {
+  observer = new IntersectionObserver((entries) => {
+    if (entries.some((entry) => entry.isIntersecting)) void loadMore();
+  });
+  if (sentinel.value) observer.observe(sentinel.value);
+  await retry();
+});
+onBeforeUnmount(() => observer?.disconnect());
 </script>
 
 <template>
-  <section>
-    <p v-if="!pagesLoaded" class="muted">Loading…</p>
-    <p v-else-if="all.length === 0" class="muted">No pages yet.</p>
-    <template v-else>
-      <input v-model="filter" class="page-filter" type="search" placeholder="Filter" aria-label="Filter pages" autocomplete="off" />
-      <p class="muted page-count">
-        {{ count(shownNamed.length, named.length, "page", "pages") }},
-        {{ count(shownDays.length, days.length, "journal day", "journal days") }}
-      </p>
-      <template v-if="!listAll">
-        <h2 class="page-section">Recently changed</h2>
-        <p v-if="recentFailed && recentData === null" class="error">Couldn't load the recently changed pages.</p>
-        <p v-else-if="recentData === null" class="muted">Loading…</p>
-        <template v-else>
-          <ul class="page-list recent-pages">
-            <li v-for="page in recent" :key="page.key">
-              <RouterLink :to="{ name: 'page', params: { name: page.name } }">{{ page.name }}</RouterLink>
-            </li>
-          </ul>
-          <button type="button" class="outline-button" @click="showAll = true">Show all</button>
-        </template>
-      </template>
-      <template v-else>
-        <ul v-if="shownNamed.length > 0" class="page-list">
-          <li v-for="page in shownNamed" :key="page.key">
-            <RouterLink :to="{ name: 'page', params: { name: page.name } }">{{ page.name }}</RouterLink>
-          </li>
-        </ul>
-        <template v-if="shownDays.length > 0">
-          <h2 class="page-section">Journal days</h2>
-          <ul class="page-list days">
-            <li v-for="page in shownDays" :key="page.key">
-              <RouterLink :to="{ name: 'page', params: { name: page.name } }">{{ journalTitle(page.name) }}</RouterLink>
-            </li>
-          </ul>
-        </template>
-      </template>
-    </template>
-  </section>
+  <p v-if="failed && data === null" class="error">Couldn't load the pages.</p>
+  <p v-else-if="data === null" class="muted">Loading…</p>
+  <p v-else-if="list.length === 0" class="muted">No pages yet.</p>
+  <template v-else>
+    <ul class="page-list">
+      <li v-for="page in list" :key="page.key">
+        <RouterLink :to="{ name: 'page', params: { name: page.name } }">{{ page.name }}</RouterLink>
+        <time :datetime="new Date(page.changed).toISOString()">{{ day(page.changed) }}</time>
+      </li>
+    </ul>
+    <p v-if="failed" class="error">
+      Couldn't load more pages.
+      <button type="button" class="outline-button" @click="retry">Try again</button>
+    </p>
+  </template>
+  <div ref="sentinel" class="journal-end" />
 </template>

@@ -6,6 +6,11 @@ export interface PageSummary {
   journal_day: number | null;
 }
 
+/** A named page with when it last changed, for the Pages tab. */
+export interface RecentPage extends PageSummary {
+  changed: number; // when one of its blocks was last saved, or the page was created if it has none (ms)
+}
+
 /** A block, as the server stores it and the browser holds it. */
 export interface Block {
   id: string;
@@ -50,6 +55,13 @@ export interface BatchResult {
   overwrote: Overwrite[]; // text this batch replaced that another tab or device had written
   refCounts: Record<string, number>; // new ref_count of blocks whose references this batch changed
   renamed?: { from: string; to: string }; // a rename: the old page key, and the new name
+}
+
+/** The favourites after a change to them, with the pages that change created or removed. */
+export interface FavouritesChange {
+  favourites: PageSummary[]; // in the owner's order
+  pages: PageSummary[]; // pages created: a page can be a favourite before anything is written on it
+  removedPages: string[]; // keys of unused pages that stopped being favourites
 }
 
 export interface Overwrite {

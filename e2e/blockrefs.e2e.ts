@@ -100,7 +100,7 @@ test("a reference is a real link: Enter on it zooms in, Ctrl+click opens it in a
   await page.goto(`/page/${encodeURIComponent(name)}`);
   const ref = page.getByRole("link", { name: "the target" });
 
-  const [tab] = await Promise.all([context.waitForEvent("page"), ref.click({ modifiers: ["Control"] })]);
+  const [tab] = await Promise.all([context.waitForEvent("page"), ref.click({ modifiers: ["ControlOrMeta"] })]);
   await expect(tab).toHaveURL(`/b/${id}`);
   await expect(page).toHaveURL(`/page/${encodeURIComponent(name)}`); // this tab stayed put
   await tab.close();

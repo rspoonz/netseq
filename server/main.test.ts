@@ -33,7 +33,7 @@ afterAll(() => stop());
 test("the health check reports the schema version", async () => {
   const res = await fetch(`${base}/api/healthz`);
   expect(res.status).toBe(200);
-  expect(await res.json()).toEqual({ ok: true, schema: 1 });
+  expect(await res.json()).toEqual({ ok: true, schema: 2 });
 });
 
 test("starting the server makes today's backup", () => {
@@ -166,10 +166,10 @@ test("/agents serves the agent guide as markdown, and every endpoint it lists ex
   expect(res.headers.get("content-type")).toBe("text/markdown; charset=utf-8");
   const guide = await res.text();
   expect(guide).toStartWith("# NetSeq: a guide for AI agents");
-  const endpoints = [...guide.matchAll(/`(GET|POST) (\/api\/[^`?\s]+)/g)].map((m) => [m[1], m[2]] as const);
+  const endpoints = [...guide.matchAll(/`(GET|POST|PUT) (\/api\/[^`?\s]+)/g)].map((m) => [m[1], m[2]] as const);
   expect(endpoints.length).toBeGreaterThanOrEqual(7);
   for (const [method, path] of endpoints) {
-    const init = method === "POST" ? { method, headers: { "content-type": "application/json" }, body: "{}" } : {};
+    const init = method !== "GET" ? { method, headers: { "content-type": "application/json" }, body: "{}" } : {};
     const answer = await (await fetch(`${base}${path}`, init)).text();
     expect(`${method} ${path}: ${answer}`).not.toContain('"not found"');
   }
@@ -211,6 +211,60 @@ test("agents add, edit and move blocks over HTTP; open tabs hear of it", async (
   const stale = await post("edit", { id: ids[0], content: "x", expect: "TODO first" });
   expect([stale.status, await stale.json()]).toEqual([409, { error: "the block has changed since you read it", content: "DONE first" }]);
   expect((await post("add", "not an object")).status).toBe(400);
+});
+
+test("favourites are set as one list; open tabs hear of it, and /llms.txt is the agent guide too", async () => {
+  const controller = new AbortController();
+  const events = (await fetch(`${base}/api/events`, { signal: controller.signal })).body!.getReader();
+  const put = (body: unknown) =>
+    fetch(`${base}/api/favourites`, { method: "PUT", headers: { "content-type": "application/json" }, body: JSON.stringify(body) });
+
+  const set = await put({ pages: ["Agent Notes", "Not written yet"] });
+  expect(set.status).toBe(200);
+  let text = "";
+  while (!text.includes("event: favourites")) text += new TextDecoder().decode((await events.read()).value);
+  controller.abort();
+  const list = (await (await fetch(`${base}/api/favourites`)).json()) as { name: string }[];
+  expect(list.map((page) => page.name)).toEqual(["Agent Notes", "Not written yet"]);
+
+  expect([(await put({ pages: "Agent Notes" })).status, (await put({ pages: [] })).status]).toEqual([400, 200]);
+  expect(await (await fetch(`${base}/api/favourites`)).json()).toEqual([]);
+  expect(await (await fetch(`${base}/llms.txt`)).text()).toStartWith("# NetSeq: a guide for AI agents");
+});
+
+test("/mcp answers MCP clients over HTTP, as a client sends its requests", async () => {
+  const headers = { "content-type": "application/json", accept: "application/json, text/event-stream", "mcp-protocol-version": "2025-06-18" };
+  const post = (message: unknown) => fetch(`${base}/mcp`, { method: "POST", headers, body: JSON.stringify(message) });
+  const init = await post({ jsonrpc: "2.0", id: 0, method: "initialize", params: { protocolVersion: "2025-06-18", capabilities: {}, clientInfo: { name: "test", version: "1" } } });
+  expect(init.headers.get("content-type")).toStartWith("application/json");
+  expect(((await init.json()) as { result: { protocolVersion: string } }).result.protocolVersion).toBe("2025-06-18");
+  expect((await post({ jsonrpc: "2.0", method: "notifications/initialized" })).status).toBe(202);
+
+  const call = await post({ jsonrpc: "2.0", id: "a", method: "tools/call", params: { name: "add_blocks", arguments: { page: "Via MCP", text: "hello" } } });
+  const { id, result } = (await call.json()) as { id: string; result: { content: { text: string }[] } };
+  expect([id, JSON.parse(result.content[0].text).page]).toEqual(["a", "Via MCP"]);
+  expect(await (await fetch(`${base}/api/agent/page?name=via%20mcp`)).text()).toContain("- hello");
+
+  expect((await fetch(`${base}/mcp`)).status).toBe(405); // no stream to listen on
+  const crossSite = await handle(new Request(`${base}/mcp`, { method: "POST", headers: { ...headers, "sec-fetch-site": "cross-site" }, body: "{}" }));
+  expect(crossSite.status).toBe(403); // a website open in the same browser can't call tools
+});
+
+test("recently changed pages come 20 at a time unless more are asked for", async () => {
+  const ops = Array.from({ length: 25 }, (_, i) => blockOp(`many-${i}`, `Many ${i}`, null, "a0"));
+  await fetch(`${base}/api/batch`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ writer: "t", device: "T", ops }) });
+  const count = async (query: string) => ((await (await fetch(`${base}/api/pages/recent${query}`)).json()) as unknown[]).length;
+  expect([await count(""), await count("?limit=3"), await count("?limit=nonsense")]).toEqual([20, 3, 20]);
+  expect(await count("?limit=5000")).toBeGreaterThanOrEqual(25);
+});
+
+test("the web app can be installed: its manifest names icons that exist", async () => {
+  const web = join(import.meta.dir, "..", "web");
+  expect(await Bun.file(join(web, "index.html")).text()).toContain('<link rel="manifest" href="/manifest.webmanifest" />');
+  const manifest = (await Bun.file(join(web, "public", "manifest.webmanifest")).json()) as { display: string; icons: { src: string }[] };
+  expect(manifest.display).toBe("standalone");
+  expect(manifest.icons.length).toBeGreaterThanOrEqual(2);
+  for (const icon of manifest.icons) expect(await Bun.file(join(web, "public", icon.src)).exists()).toBe(true);
 });
 
 test("the web app's page points agents to /agents", async () => {

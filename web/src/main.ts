@@ -1,6 +1,7 @@
 import { createApp, watch } from "vue";
 import App from "./App.vue";
 import { startLiveUpdates } from "./events";
+import { loadFavourites } from "./favourites";
 import { notify } from "./notices";
 import * as outbox from "./outbox";
 import { router } from "./router";
@@ -16,8 +17,10 @@ outbox.onResult((result) => {
 outbox.start();
 startLiveUpdates();
 void loadPageList();
+void loadFavourites().catch(() => {}); // offline: the next refresh loads them
 watch(refreshes, () => {
   void loadPageList().catch(() => {});
+  void loadFavourites().catch(() => {});
   forgetRefTargets();
 });
 createApp(App).use(router).mount("#app");

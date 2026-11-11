@@ -1,7 +1,7 @@
 import type { Database } from "bun:sqlite";
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import type { Op } from "../shared/types";
-import { AGENT_WRITER, AgentError, addBlocks, editBlock, moveBlock, pageOutline } from "./agent";
+import { AGENT_WRITER, AgentError, addBlocks, blockOutline, deleteBlock, editBlock, moveBlock, pageOutline } from "./agent";
 import { applyBatch } from "./apply";
 import { openDb } from "./db";
 import { getHistory } from "./read";
@@ -305,5 +305,36 @@ describe("editing", () => {
     expect(refused(() => editBlock(db, { id: "missing", content: "x" }))).toMatchObject({ message: "no such block", status: 404 });
     expect(refused(() => editBlock(db, { id: "a" })).status).toBe(400);
     expect(refused(() => editBlock(db, [])).status).toBe(400);
+  });
+});
+
+describe("deleting a block", () => {
+  beforeEach(() => {
+    apply(
+      blockOp("a", "Project", null, "a0", { content: "Plan" }),
+      blockOp("b", "Project", "a", "a0", { content: "step ((c))", collapsed: true }),
+      blockOp("b1", "Project", "b", "a0", { content: "detail" }),
+      blockOp("c", "Project", null, "a1", { content: "Other" }),
+    );
+  });
+
+  test("takes everything under it, and answers with what went as an outline", () => {
+    const { result, ...reply } = deleteBlock(db, { id: "b", expect: "  step ((c))\n  id:: b", agent: "Claude" });
+    expect(reply).toEqual({ id: "b", page: "Project", deleted: 2, outline: "- step ((c))\n  collapsed:: true\n\t- detail" });
+    expect(result.deleted.sort()).toEqual(["b", "b1"]);
+    expect(outlineOf(db, "project")).toBe("Plan\nOther");
+  });
+
+  test("is refused without the block's text as read, when it has changed, and for a missing block", () => {
+    expect(refused(() => deleteBlock(db, { id: "a" })).message).toBe("expect must be the block's text as you read it");
+    const stale = refused(() => deleteBlock(db, { id: "a", expect: "Plans" }));
+    expect([stale.status, stale.details]).toEqual([409, { content: "Plan" }]);
+    expect(refused(() => deleteBlock(db, { id: "zzz", expect: "x" })).status).toBe(404);
+    expect(outlineOf(db, "project")).toBe("Plan\n  step ((c))\n    detail\nOther");
+  });
+
+  test("a block reads as an outline of its own, wherever it sits", () => {
+    expect(blockOutline(db, "b")).toBe("- step ((c))\n  collapsed:: true\n  id:: b\n\t- detail\n\t  id:: b1");
+    expect(blockOutline(db, "zzz")).toBeNull();
   });
 });

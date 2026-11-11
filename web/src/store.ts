@@ -168,16 +168,12 @@ export function applyTree(blocks: Block[]): void {
   applyRows(blocks, true);
 }
 
-/** Whether `pages` holds the full list yet. */
-export const pagesLoaded = ref(false);
-
-/** Loads all pages (for autocomplete and the Pages tab); live changes keep the list up to date. */
+/** Loads all pages (for autocomplete and search); live changes keep the list up to date. */
 export async function loadPageList(): Promise<void> {
   const list = await getJSON<PageSummary[]>("/api/pages");
   const fresh = new Set(list.map((page) => page.key));
   for (const key of [...pages.keys()]) if (!fresh.has(key)) pages.delete(key);
   for (const page of list) pages.set(page.key, page);
-  pagesLoaded.value = true;
 }
 
 /** Takes in a fresh copy of one page from the server. */

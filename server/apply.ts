@@ -115,14 +115,7 @@ export function applyBatch(db: Database, batch: Batch, now = Date.now()): BatchR
 
     repair(db, touched, emptied, rev, now);
 
-    const removedPages = [...emptied].filter(
-      (key) =>
-        db
-          .query(
-            "DELETE FROM pages WHERE key = ?1 AND NOT EXISTS (SELECT 1 FROM blocks WHERE page = ?1) AND NOT EXISTS (SELECT 1 FROM refs WHERE page = ?1) RETURNING key",
-          )
-          .get(key) !== null,
-    );
+    const removedPages = [...emptied].filter((key) => db.query(`${DELETE_UNUSED_PAGE} RETURNING key`).get(key) !== null);
 
     return {
       rev,
@@ -135,6 +128,13 @@ export function applyBatch(db: Database, batch: Batch, now = Date.now()): BatchR
     };
   })();
 }
+
+/** Deletes page ?1 if nothing is written on it, nothing links to it and it isn't a favourite. */
+export const DELETE_UNUSED_PAGE = `
+  DELETE FROM pages WHERE key = ?1
+    AND NOT EXISTS (SELECT 1 FROM blocks WHERE page = ?1)
+    AND NOT EXISTS (SELECT 1 FROM refs WHERE page = ?1)
+    AND NOT EXISTS (SELECT 1 FROM favourites WHERE page = ?1)`;
 
 /** The current ref_count of each block. */
 function refCounts(db: Database, ids: Set<string>): Record<string, number> {

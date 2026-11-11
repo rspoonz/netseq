@@ -1,9 +1,10 @@
 <script setup lang="ts">
-import { computed, onBeforeUnmount, onMounted } from "vue";
-import { RouterLink, RouterView } from "vue-router";
+import { computed, onBeforeUnmount, onMounted, watch } from "vue";
+import { RouterLink, RouterView, useRouter } from "vue-router";
 import History from "./components/History.vue";
 import Notices from "./components/Notices.vue";
 import SearchPalette from "./components/SearchPalette.vue";
+import Sidebar from "./components/Sidebar.vue";
 import { live } from "./events";
 import { historyFor } from "./notices";
 import { sync } from "./outbox";
@@ -14,6 +15,12 @@ import MobileToolbar from "./outliner/MobileToolbar.vue";
 import { clearSelection, handleSelectionKey, selection } from "./outliner/selection";
 import { redo, undo } from "./outliner/undo";
 import { palette } from "./palette";
+import { closeDrawer, drawerOpen, sidebarOpen, toggleSidebar } from "./sidebar";
+
+// The favourites, when open over the notes (on a phone), close once you go anywhere: a tab (even
+// the one you're on, which isn't a navigation), a search result, or search itself.
+useRouter().afterEach(closeDrawer);
+watch(() => palette.open, closeDrawer);
 
 function clearSelectionOnClick(): void {
   if (selection.ids.length > 0) clearSelection();
@@ -43,6 +50,10 @@ function onKeydown(event: KeyboardEvent): void {
     closeBulletMenu();
     if (historyFor.value) {
       historyFor.value = null; // closing the panel is all this Esc does
+      return;
+    }
+    if (drawerOpen.value) {
+      closeDrawer();
       return;
     }
   }
@@ -77,17 +88,30 @@ const syncLabel = computed(() => {
 
 <template>
   <header class="topbar">
+    <button
+      type="button"
+      class="icon-button sidebar-toggle"
+      aria-label="Favourites"
+      :aria-expanded="sidebarOpen"
+      :title="sidebarOpen ? 'Hide favourites' : 'Show favourites'"
+      @click="toggleSidebar"
+    >
+      ☰
+    </button>
     <span class="brand">NetSeq</span>
-    <nav>
+    <nav @click="closeDrawer">
       <RouterLink to="/">Journals</RouterLink>
       <RouterLink to="/pages">Pages</RouterLink>
     </nav>
     <button type="button" class="search-button" title="Search (Ctrl+K)" @click="palette.open = true">Search</button>
     <span class="sync" :class="status" role="status">{{ syncLabel }}</span>
   </header>
-  <main class="content">
-    <RouterView />
-  </main>
+  <div class="layout">
+    <Sidebar />
+    <main class="content">
+      <RouterView />
+    </main>
+  </div>
   <MobileToolbar />
   <Notices />
   <History />

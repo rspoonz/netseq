@@ -6,13 +6,15 @@ import { pageNameProblem } from "../shared/refs";
 import type { Batch, BatchResult, Op } from "../shared/types";
 import { applyBatch, createsCycle } from "./apply";
 import { pageMarkdown } from "./export";
-import { getPage, pageSummary } from "./read";
+import { getBlockTree, getPage, pageSummary } from "./read";
 
-// The API for AI agents, described to them by agents.md (served at /agents). Agents read pages as
-// markdown outlines and write through three small endpoints (add, edit, move), so they never deal
-// with order keys, revs or writer ids. Changes go through applyBatch, like the browser's, so
-// they're indexed and show up live in open tabs. Agents can't delete anything, and an edit always
-// keeps the text it replaced in the block's history ("Earlier versions").
+// The API for AI agents, described to them by agents.md (served at /agents) and offered as tools
+// over MCP (mcp.ts). Agents read pages as markdown outlines and write through a few small
+// endpoints (add, edit, move, delete), so they never deal with order keys, revs or writer ids.
+// Changes go through applyBatch, like the browser's, so they're indexed and show up live in open
+// tabs. An edit always keeps the text it replaced in the block's history ("Earlier versions"). A
+// delete is only for when the owner asked for it: it must quote the block as the agent read it,
+// and answers with what it removed, so it can be put back.
 
 /** A request the agent API refuses, with the HTTP status and anything else to answer it with. */
 export class AgentError extends Error {
@@ -42,6 +44,13 @@ function agentWriter(name: unknown): Pick<Batch, "writer" | "device"> {
 export function pageOutline(db: Database, name: string): string | null {
   const { page, blocks } = getPage(db, name);
   return page ? pageMarkdown(blocks, { allIds: true }) : null;
+}
+
+/** A block and everything under it as a markdown outline (with every block's id if `allIds`), or null if there's no such block. */
+export function blockOutline(db: Database, id: string, allIds = true): string | null {
+  const tree = getBlockTree(db, id);
+  // The block is the top of this outline, wherever it sits on its page.
+  return tree && pageMarkdown(tree.blocks.map((b) => (b.id === id ? { ...b, parent: null } : b)), { allIds });
 }
 
 type BlockOp = Extract<Op, { t: "block" }>;
@@ -261,6 +270,36 @@ export function editBlock(db: Database, body: unknown, now = Date.now()): Edited
       now,
     );
     return { result: applyBatch(db, { ...who, ops: [rewrite(block, { content: text })] }, now), id, page: block.page };
+  })();
+}
+
+export interface Deleted {
+  result: BatchResult;
+  id: string;
+  page: string; // the name of the page it was on
+  deleted: number; // how many blocks went: the block and everything under it
+  outline: string; // what was deleted, as a markdown outline that add can put back
+}
+
+/**
+ * Deletes a block and everything under it. `expect` (the block's text as the agent read it) is
+ * required: a block that has changed since is left alone, with a 409 and its text now.
+ */
+export function deleteBlock(db: Database, body: unknown, now = Date.now()): Deleted {
+  if (!isRecord(body)) throw new AgentError("expected a JSON object");
+  const { id, expect } = body;
+  const who = agentWriter(body.agent);
+  if (typeof id !== "string") throw new AgentError("id must be a block id");
+  if (typeof expect !== "string") throw new AgentError("expect must be the block's text as you read it");
+
+  return db.transaction((): Deleted => {
+    const block = findBlock(db, id);
+    if (comparable(expect) !== comparable(block.content)) {
+      throw new AgentError("the block has changed since you read it", 409, { content: block.content });
+    }
+    const outline = blockOutline(db, id, false)!;
+    const result = applyBatch(db, { ...who, ops: [{ t: "delete", id }] }, now);
+    return { result, id, page: block.page, deleted: result.deleted.length, outline };
   })();
 }
 

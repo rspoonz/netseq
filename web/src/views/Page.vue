@@ -4,6 +4,7 @@ import { useRoute, useRouter } from "vue-router";
 import { isJournalKey, journalName, journalTitle, pageKey } from "../../../shared/names";
 import { pageNameProblem } from "../../../shared/refs";
 import { renamePage } from "../api";
+import { isFavourite, toggleFavourite } from "../favourites";
 import Agenda from "../outliner/Agenda.vue";
 import LinkedRefs from "../outliner/LinkedRefs.vue";
 import PageOutline from "../outliner/PageOutline.vue";
@@ -17,6 +18,7 @@ const route = useRoute();
 const key = computed(() => pageKey(props.name));
 const page = computed(() => pages.get(key.value));
 const isToday = computed(() => key.value === journalName(new Date()));
+const starred = computed(() => isFavourite(props.name));
 const title = computed(() => (isJournalKey(key.value) ? journalTitle(key.value) : (page.value?.name ?? props.name)));
 
 // Clicking the title renames the page (journal pages are named after their date, so they can't be).
@@ -70,19 +72,31 @@ watch(lastRename, (rename) => {
 
 <template>
   <section>
-    <input
-      v-if="renaming"
-      ref="input"
-      v-model="draft"
-      class="page-title-input"
-      aria-label="Page name"
-      @keydown.enter.prevent="finishRename"
-      @keydown.escape="renaming = false"
-      @blur="finishRename"
-    />
-    <h1 v-else :class="{ renamable: canRename }" :title="canRename ? 'Click to rename' : undefined" @click="startRename">
-      {{ title }}
-    </h1>
+    <div class="page-title">
+      <input
+        v-if="renaming"
+        ref="input"
+        v-model="draft"
+        class="page-title-input"
+        aria-label="Page name"
+        @keydown.enter.prevent="finishRename"
+        @keydown.escape="renaming = false"
+        @blur="finishRename"
+      />
+      <h1 v-else :class="{ renamable: canRename }" :title="canRename ? 'Click to rename' : undefined" @click="startRename">
+        {{ title }}
+      </h1>
+      <button
+        type="button"
+        class="icon-button star"
+        :aria-pressed="starred"
+        :aria-label="starred ? 'Remove from favourites' : 'Add to favourites'"
+        :title="starred ? 'Remove from favourites' : 'Add to favourites'"
+        @click="toggleFavourite(page?.name ?? name)"
+      >
+        {{ starred ? "★" : "☆" }}
+      </button>
+    </div>
     <p v-if="error" class="error">{{ error }}</p>
     <PageOutline :name="name" view="page" @ready="loaded = $event" />
     <Agenda v-if="isToday" />

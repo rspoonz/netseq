@@ -8,6 +8,10 @@ Keys while editing: Enter splits a block, Shift+Enter adds a line, Tab and Shift
 
 Typing `/` offers commands: task markers, Scheduled and Deadline (with a date picker), links to today, tomorrow, yesterday or any date, and Query.
 
+## Favourites
+
+The ☆ beside a page's title makes it a favourite. Favourites are listed in the sidebar (☰ shows and hides it; on a phone it opens over your notes), and Ctrl+K lists them before you type, so Ctrl+K then Enter opens the first. Drag a favourite to reorder the list, or press Alt+↑ / Alt+↓ on it. The list is stored with your notes, so it's the same on every device.
+
 ## Block references
 
 Typing `((` and a few words searches blocks; picking one inserts a reference such as `((6f1c2a7e-…))`, which shows that block's first line, stays up to date when it changes, and zooms into it when clicked. Right-clicking a bullet offers "Copy block ref", to paste into any block. A block that's referenced shows how many blocks reference it; click the number to list them. A reference to a deleted block shows "missing block".
@@ -35,7 +39,19 @@ For example `{{query (and [[Project]] (task TODO DOING))}}`. Results show at mos
 
 ## AI agents
 
-`/agents` explains NetSeq and its API to AI agents. Give an agent NetSeq's address (the page there points it to the guide), or `http://localhost:8080/agents` itself, and ask it to look something up or add to your notes. Agents read pages as markdown outlines, add blocks with `/api/agent/add`, change a block's text with `/api/agent/edit` and move, indent or outdent blocks with `/api/agent/move`. They can't delete anything, and an agent's edit keeps the text it replaced in the block's history. The guide is [server/agents.md](server/agents.md).
+There are two ways in, with the same abilities and the same rules.
+
+**MCP.** NetSeq is a Model Context Protocol server at `/mcp`, so an agent that speaks MCP gets your notes as tools with nothing to read first. For Claude Code:
+
+```sh
+claude mcp add --transport http netseq http://localhost:8080/mcp
+```
+
+**Plain HTTP.** `/agents` explains NetSeq and its API to any agent that can fetch a URL. Give it NetSeq's address (the page there points it to the guide), or `http://localhost:8080/agents` itself, and ask it to look something up or add to your notes. The guide is [server/agents.md](server/agents.md).
+
+Either way, agents read pages as markdown outlines, search and run queries, add blocks, change a block's text, and move, indent or outdent blocks. They can read and set your favourites, which tells them what matters to you. An agent's edit keeps the text it replaced in the block's history.
+
+Agents can delete a block (with everything under it), but are told to do so only when you expressly ask. NetSeq can't check that you asked: what it does is refuse a delete that doesn't quote the block as it is now, and hand the agent what it deleted so it can be put back. Over MCP, `delete_block` is marked as destructive, a hint a client can use to ask you before running it. The daily backup is the last resort.
 
 ## Run it
 
@@ -50,6 +66,12 @@ bun run build && bun run start     # the built app and the API on http://localho
 Notes are stored in `data/netseq.db`. Set `NETSEQ_DATA` to use another folder, `PORT` to change the port, and `NETSEQ_HOSTS` to list host names other than localhost that the server should answer to (comma-separated), for example behind a proxy.
 
 The server has no login and only listens on 127.0.0.1. Don't expose it to a network: anything that can reach it, under any name in `NETSEQ_HOSTS`, can read and change your notes.
+
+## On your phone
+
+NetSeq works in a phone's browser, and can be put on the home screen: in Safari, Share → Add to Home Screen (in Chrome on Android, Install app). It then opens as an app of its own, without the browser's bars. To go back, swipe from the left edge.
+
+The phone has to reach the server, which only answers on the machine it runs on. A private network such as [Tailscale](https://tailscale.com) does that without opening NetSeq to anyone else: run `tailscale serve 8080` on that machine, and start NetSeq with `NETSEQ_HOSTS` set to the machine's Tailscale name (`NETSEQ_HOSTS=my-mac.my-tailnet.ts.net`). It still needs the connection: edits made while it's away are sent when it's back, but the app won't start without the server.
 
 ## Backups and export
 
