@@ -232,6 +232,24 @@ test("favourites are set as one list; open tabs hear of it, and /llms.txt is the
   expect(await (await fetch(`${base}/llms.txt`)).text()).toStartWith("# NetSeq: a guide for AI agents");
 });
 
+test("/mcp answers MCP clients over HTTP, as a client sends its requests", async () => {
+  const headers = { "content-type": "application/json", accept: "application/json, text/event-stream", "mcp-protocol-version": "2025-06-18" };
+  const post = (message: unknown) => fetch(`${base}/mcp`, { method: "POST", headers, body: JSON.stringify(message) });
+  const init = await post({ jsonrpc: "2.0", id: 0, method: "initialize", params: { protocolVersion: "2025-06-18", capabilities: {}, clientInfo: { name: "test", version: "1" } } });
+  expect(init.headers.get("content-type")).toStartWith("application/json");
+  expect(((await init.json()) as { result: { protocolVersion: string } }).result.protocolVersion).toBe("2025-06-18");
+  expect((await post({ jsonrpc: "2.0", method: "notifications/initialized" })).status).toBe(202);
+
+  const call = await post({ jsonrpc: "2.0", id: "a", method: "tools/call", params: { name: "add_blocks", arguments: { page: "Via MCP", text: "hello" } } });
+  const { id, result } = (await call.json()) as { id: string; result: { content: { text: string }[] } };
+  expect([id, JSON.parse(result.content[0].text).page]).toEqual(["a", "Via MCP"]);
+  expect(await (await fetch(`${base}/api/agent/page?name=via%20mcp`)).text()).toContain("- hello");
+
+  expect((await fetch(`${base}/mcp`)).status).toBe(405); // no stream to listen on
+  const crossSite = await handle(new Request(`${base}/mcp`, { method: "POST", headers: { ...headers, "sec-fetch-site": "cross-site" }, body: "{}" }));
+  expect(crossSite.status).toBe(403); // a website open in the same browser can't call tools
+});
+
 test("the web app's page points agents to /agents", async () => {
   const html = await Bun.file(join(import.meta.dir, "..", "web", "index.html")).text();
   expect(html).toContain('<link rel="help" type="text/markdown" href="/agents" />');

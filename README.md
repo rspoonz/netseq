@@ -39,7 +39,19 @@ For example `{{query (and [[Project]] (task TODO DOING))}}`. Results show at mos
 
 ## AI agents
 
-`/agents` explains NetSeq and its API to AI agents. Give an agent NetSeq's address (the page there points it to the guide), or `http://localhost:8080/agents` itself, and ask it to look something up or add to your notes. Agents read pages as markdown outlines, add blocks with `/api/agent/add`, change a block's text with `/api/agent/edit` and move, indent or outdent blocks with `/api/agent/move`. They can read and set your favourites, which tells them what matters to you. They can't delete anything, and an agent's edit keeps the text it replaced in the block's history. The guide is [server/agents.md](server/agents.md).
+There are two ways in, with the same abilities and the same rules.
+
+**MCP.** NetSeq is a Model Context Protocol server at `/mcp`, so an agent that speaks MCP gets your notes as tools with nothing to read first. For Claude Code:
+
+```sh
+claude mcp add --transport http netseq http://localhost:8080/mcp
+```
+
+**Plain HTTP.** `/agents` explains NetSeq and its API to any agent that can fetch a URL. Give it NetSeq's address (the page there points it to the guide), or `http://localhost:8080/agents` itself, and ask it to look something up or add to your notes. The guide is [server/agents.md](server/agents.md).
+
+Either way, agents read pages as markdown outlines, search and run queries, add blocks, change a block's text, and move, indent or outdent blocks. They can read and set your favourites, which tells them what matters to you. An agent's edit keeps the text it replaced in the block's history.
+
+Agents can delete a block (with everything under it), but are told to do so only when you expressly ask. NetSeq can't check that you asked: what it does is refuse a delete that doesn't quote the block as it is now, and hand the agent what it deleted so it can be put back. Over MCP, `delete_block` is marked as destructive, a hint a client can use to ask you before running it. The daily backup is the last resort.
 
 ## Run it
 

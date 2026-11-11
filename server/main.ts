@@ -1,11 +1,12 @@
 import type { Database } from "bun:sqlite";
 import { stat } from "node:fs/promises";
 import { join, resolve, sep } from "node:path";
-import { AgentError, addBlocks, editBlock, moveBlock, pageOutline } from "./agent";
+import { AgentError, addBlocks, deleteBlock, editBlock, moveBlock, pageOutline } from "./agent";
 import { applyBatch, BadBatch, parseBatch, pruneHistory, renamePage } from "./apply";
 import { dailyBackup } from "./backup";
 import { openDb, schemaVersion } from "./db";
 import { EventHub } from "./events";
+import { handleMcp } from "./mcp";
 import { BadFavourites, getFavourites, setFavourites } from "./favourites";
 import { checkRequest, parseHosts, withSecurityHeaders } from "./guard";
 import { dayNumber, isJournalKey, journalName } from "../shared/names";
@@ -83,6 +84,8 @@ const AGENT_GUIDE = join(import.meta.dir, "agents.md");
 
 async function route(req: Request, url: URL, db: Database, hub: EventHub, distDir: string): Promise<Response> {
   if (url.pathname.startsWith("/api/")) return api(req, url, db, hub);
+  // The same API as tools, for agents that speak the Model Context Protocol.
+  if (url.pathname === "/mcp") return handleMcp(req, db, hub);
   if (req.method !== "GET" && req.method !== "HEAD") return new Response("Method not allowed", { status: 405 });
   // What NetSeq is and how to use its API, for AI agents (/llms.txt is where some of them look first).
   if (url.pathname === "/agents" || url.pathname === "/llms.txt") return markdown(Bun.file(AGENT_GUIDE));
@@ -185,9 +188,15 @@ async function api(req: Request, url: URL, db: Database, hub: EventHub): Promise
     }
     case "POST /api/agent/add":
     case "POST /api/agent/edit":
-    case "POST /api/agent/move": {
+    case "POST /api/agent/move":
+    case "POST /api/agent/delete": {
       const body = await req.json().catch(() => null);
-      const write = { "/api/agent/add": addBlocks, "/api/agent/edit": editBlock, "/api/agent/move": moveBlock }[url.pathname];
+      const write = {
+        "/api/agent/add": addBlocks,
+        "/api/agent/edit": editBlock,
+        "/api/agent/move": moveBlock,
+        "/api/agent/delete": deleteBlock,
+      }[url.pathname];
       try {
         const { result, ...reply } = write!(db, body);
         if (result) hub.publish("change", result);
