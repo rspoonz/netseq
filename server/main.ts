@@ -253,6 +253,12 @@ async function serveStatic(pathname: string, distDir: string): Promise<Response>
     const cache = pathname.startsWith("/assets/") ? "public, max-age=31536000, immutable" : "no-cache";
     return new Response(Bun.file(file), { headers: { "Cache-Control": cache } });
   }
+  // A missing file is a 404, not the app: iOS asks for names like /apple-touch-icon-precomposed.png
+  // when adding NetSeq to the home screen, and gives up on the icon if it gets a page back.
+  // Page names can have dots in them, so paths under /page/ are left to the app.
+  if (!pathname.startsWith("/page/") && /\.[a-z0-9]+$/i.test(pathname)) {
+    return new Response("Not found", { status: 404 });
+  }
   // Anything else is a route inside the app.
   const index = join(distDir, "index.html");
   if (await isFile(index)) return new Response(Bun.file(index), { headers: { "Cache-Control": "no-cache" } });
