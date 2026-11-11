@@ -15,6 +15,8 @@ import { groupBlocks, idsOf } from "./read";
 //   (page "name")             blocks on the page
 //   (between -7d today)       blocks on journal days in the range: today, yesterday, tomorrow,
 //                             ±Nd/w/m/y from today, or a date (2026-11-02 or [[2026-11-02]])
+//   (anniversary today +60d)  blocks on journal days in earlier years whose month and day fall
+//                             in the range: birthdays and the like. Same dates as (between …)
 //   (and …) (or …) (not …)    combine them; several terms side by side mean "and"
 //
 // A query becomes one parameterised SQL statement; user text only ever goes in as parameters.
@@ -30,7 +32,7 @@ export type QueryNode =
   | { t: "priority"; values: string[] }
   | { t: "property"; key: string; value: string | null }
   | { t: "page"; name: string }
-  | { t: "between"; from: string; to: string };
+  | { t: "between" | "anniversary"; from: string; to: string };
 
 type Token = { t: "(" } | { t: ")" } | { t: "word" | "string" | "ref"; value: string };
 
@@ -148,7 +150,8 @@ export function parseQuery(src: string): QueryNode {
         node = { t: "page", name: argument("a page name") };
         break;
       case "between":
-        node = { t: "between", from: argument("a start date"), to: argument("an end date") };
+      case "anniversary":
+        node = { t: name, from: argument("a start date"), to: argument("an end date") };
         break;
       default:
         throw new QueryError(`Unknown filter (${op.value}).`);
@@ -163,7 +166,7 @@ export function parseQuery(src: string): QueryNode {
   return items.length === 1 ? items[0] : { t: "and", items };
 }
 
-/** A day in a (between …) filter, as yyyymmdd. `today` is the browser's today. */
+/** A day in a (between …) or (anniversary …) filter, as yyyymmdd. `today` is the browser's today. */
 export function resolveDay(text: string, today: number): number {
   const word = text.toLowerCase();
   const offsets: Record<string, number> = { today: 0, yesterday: -1, tomorrow: 1 };
@@ -230,6 +233,20 @@ function compile(node: QueryNode, today: number, out: Compiled): string {
     case "between": {
       const [from, to] = [resolveDay(node.from, today), resolveDay(node.to, today)].sort((x, y) => x - y);
       return `b.page IN (SELECT key FROM pages WHERE journal_day BETWEEN ${param(from)} AND ${param(to)})`;
+    }
+    case "anniversary": {
+      const [from, to] = [resolveDay(node.from, today), resolveDay(node.to, today)].sort((x, y) => x - y);
+      // journal_day is yyyymmdd, so the last four digits are the month and day.
+      const md = "journal_day % 10000";
+      const [first, last] = [param(from % 10_000), param(to % 10_000)];
+      const window =
+        shiftDay(from, 1, "y") <= to
+          ? "1" // a year or more: every day matches
+          : from % 10_000 <= to % 10_000
+            ? `${md} BETWEEN ${first} AND ${last}`
+            : `(${md} >= ${first} OR ${md} <= ${last})`; // the range crosses New Year
+      // Days in the range itself are left out: nothing is its own "0th anniversary".
+      return `b.page IN (SELECT key FROM pages WHERE journal_day < ${param(from)} AND ${window})`;
     }
   }
 }
