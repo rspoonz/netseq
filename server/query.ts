@@ -2,7 +2,7 @@ import type { Database } from "bun:sqlite";
 import { MARKERS, propertyValue, searchText } from "../shared/blocktext";
 import { dayName, dayNumber, isJournalKey, pageKey } from "../shared/names";
 import { matchPageRef, matchTag } from "../shared/refs";
-import type { QueryResult } from "../shared/types";
+import type { QueryResult, RefGroup } from "../shared/types";
 import { groupBlocks, idsOf } from "./read";
 
 // {{query …}}: Logseq's simple queries.
@@ -16,7 +16,8 @@ import { groupBlocks, idsOf } from "./read";
 //   (between -7d today)       blocks on journal days in the range: today, yesterday, tomorrow,
 //                             ±Nd/w/m/y from today, or a date (2026-11-02 or [[2026-11-02]])
 //   (anniversary today +60d)  blocks on journal days in earlier years whose month and day fall
-//                             in the range: birthdays and the like. Same dates as (between …)
+//                             in the range: birthdays and the like. Same dates as (between …).
+//                             The results come soonest first
 //   (and …) (or …) (not …)    combine them; several terms side by side mean "and"
 //
 // A query becomes one parameterised SQL statement; user text only ever goes in as parameters.
@@ -193,6 +194,7 @@ function shiftDay(day: number, amount: number, unit: "d" | "w" | "m" | "y"): num
 interface Compiled {
   ctes: string[];
   params: Record<string, string | number>;
+  yearStart?: number; // the month and day (mmdd) an (anniversary …) range starts on
 }
 
 function compile(node: QueryNode, today: number, out: Compiled): string {
@@ -238,6 +240,7 @@ function compile(node: QueryNode, today: number, out: Compiled): string {
       const [from, to] = [resolveDay(node.from, today), resolveDay(node.to, today)].sort((x, y) => x - y);
       // journal_day is yyyymmdd, so the last four digits are the month and day.
       const md = "journal_day % 10000";
+      out.yearStart ??= from % 10_000;
       const [first, last] = [param(from % 10_000), param(to % 10_000)];
       const window =
         shiftDay(from, 1, "y") <= to
@@ -249,6 +252,18 @@ function compile(node: QueryNode, today: number, out: Compiled): string {
       return `b.page IN (SELECT key FROM pages WHERE journal_day < ${param(from)} AND ${window})`;
     }
   }
+}
+
+/**
+ * Sorts anniversaries soonest first: by month and day, counting from the day the range starts on,
+ * so December comes before January in a range that crosses New Year. The same day in two years
+ * goes oldest first. Pages that aren't journal days stay last, as they were.
+ */
+function sortBySoonest(groups: RefGroup[], yearStart: number): RefGroup[] {
+  const soonest = (day: number | null) => (day === null ? Infinity : (day % 10_000) + (day % 10_000 < yearStart ? 10_000 : 0));
+  return groups.sort(
+    (a, b) => soonest(a.page.journal_day) - soonest(b.page.journal_day) || (a.page.journal_day ?? 0) - (b.page.journal_day ?? 0),
+  );
 }
 
 /**
@@ -268,5 +283,6 @@ export function runQuery(db: Database, src: string, today: number, block: string
     )
     .all(out.params);
   const ids = idsOf(rows);
-  return { groups: groupBlocks(db, ids.slice(0, QUERY_LIMIT)), truncated: ids.length > QUERY_LIMIT };
+  const groups = groupBlocks(db, ids.slice(0, QUERY_LIMIT));
+  return { groups: out.yearStart === undefined ? groups : sortBySoonest(groups, out.yearStart), truncated: ids.length > QUERY_LIMIT };
 }

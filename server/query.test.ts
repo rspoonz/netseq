@@ -130,6 +130,24 @@ describe("anniversaries", () => {
     expect(events("2028-02-29 2028-02-29")).toEqual(["b3"]);
   });
 
+  test("the results come soonest first", () => {
+    const pages = (query: string) => runQuery(db, query, TODAY, null).groups.map((group) => group.page.key);
+    apply(blockOp("w2", "1975-11-20", null, "a0", { content: "an older wedding\nevent:: married" }));
+    // By month and day, not by year; the same day in two years goes oldest first.
+    expect(pages("(property event) (anniversary today +60d)")).toEqual(["1975-11-20", "1990-11-20", "1985-12-28"]);
+    // Across New Year, December comes before January.
+    expect(pages("(property event) (anniversary today +70d)")).toEqual(["1975-11-20", "1990-11-20", "1985-12-28", "2001-01-05"]);
+    // A year from today starts with today's month and day, wherever the year begins.
+    expect(pages("(property event born) (anniversary today +1y)")).toEqual(["1985-12-28", "2001-01-05", "1996-02-29", "1970-06-15"]);
+    // Pages that aren't journal days come last.
+    expect(pages('(or (and (property event) (anniversary today +60d)) (page "Project"))')).toEqual([
+      "1975-11-20",
+      "1990-11-20",
+      "1985-12-28",
+      "project",
+    ]);
+  });
+
   test("combined with other filters", () => {
     expect(find("(and (property event born) (anniversary today +1y))").sort()).toEqual(["b1", "b2", "b3", "b4"]);
     expect(find("(property event) (not (property event born)) (anniversary today +1y)")).toEqual(["w1"]);
