@@ -67,6 +67,12 @@ Notes are stored in `data/netseq.db`. Set `NETSEQ_DATA` to use another folder, `
 
 The server has no login and only listens on 127.0.0.1. Don't expose it to a network: anything that can reach it, under any name in `NETSEQ_HOSTS`, can read and change your notes.
 
+## On your phone
+
+NetSeq works in a phone's browser, and can be put on the home screen: in Safari, Share → Add to Home Screen (in Chrome on Android, Install app). It then opens as an app of its own, without the browser's bars. To go back, swipe from the left edge.
+
+The phone has to reach the server, which only answers on the machine it runs on. A private network such as [Tailscale](https://tailscale.com) does that without opening NetSeq to anyone else: run `tailscale serve 8080` on that machine, and start NetSeq with `NETSEQ_HOSTS` set to the machine's Tailscale name (`NETSEQ_HOSTS=my-mac.my-tailnet.ts.net`). It still needs the connection: edits made while it's away are sent when it's back, but the app won't start without the server.
+
 ## Backups and export
 
 ```sh

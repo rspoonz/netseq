@@ -2,9 +2,15 @@
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <!-- viewport-fit=cover: the app fills the screen, and style.css keeps things clear of the notch and home bar. -->
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
     <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
+    <!-- Installed on a phone's home screen, NetSeq opens as an app of its own, without the browser's bars. -->
+    <link rel="manifest" href="/manifest.webmanifest" />
+    <meta name="mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-title" content="NetSeq" />
     <meta name="theme-color" content="#f2ecbc" media="(prefers-color-scheme: light)" />
     <meta name="theme-color" content="#1f1f28" media="(prefers-color-scheme: dark)" />
     <title>NetSeq</title>

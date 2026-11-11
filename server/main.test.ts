@@ -258,6 +258,15 @@ test("recently changed pages come 20 at a time unless more are asked for", async
   expect(await count("?limit=5000")).toBeGreaterThanOrEqual(25);
 });
 
+test("the web app can be installed: its manifest names icons that exist", async () => {
+  const web = join(import.meta.dir, "..", "web");
+  expect(await Bun.file(join(web, "index.html")).text()).toContain('<link rel="manifest" href="/manifest.webmanifest" />');
+  const manifest = (await Bun.file(join(web, "public", "manifest.webmanifest")).json()) as { display: string; icons: { src: string }[] };
+  expect(manifest.display).toBe("standalone");
+  expect(manifest.icons.length).toBeGreaterThanOrEqual(2);
+  for (const icon of manifest.icons) expect(await Bun.file(join(web, "public", icon.src)).exists()).toBe(true);
+});
+
 test("the web app's page points agents to /agents", async () => {
   const html = await Bun.file(join(import.meta.dir, "..", "web", "index.html")).text();
   expect(html).toContain('<link rel="help" type="text/markdown" href="/agents" />');
