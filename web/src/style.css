@@ -667,6 +667,13 @@ h1,
   color: var(--accent);
 }
 
+/* Soft links: a page's name mentioned without [[ ]]. Link blue, with a faint dashed underline
+   instead of the brackets, so what isn't linked yet stays visible. */
+.soft-ref {
+  text-decoration: underline dashed color-mix(in srgb, var(--accent) 45%, transparent);
+  text-underline-offset: 0.2em;
+}
+
 .block-row.selected {
   background: color-mix(in srgb, var(--accent) 15%, transparent);
   border-radius: 0.25rem;

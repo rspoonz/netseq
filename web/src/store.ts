@@ -1,6 +1,7 @@
-import { nextTick, reactive, ref, shallowRef } from "vue";
+import { computed, nextTick, reactive, ref, shallowRef } from "vue";
 import { pageKey } from "../../shared/names";
 import { renameRefs } from "../../shared/refs";
+import { pageNames, softLinkable } from "../../shared/softlinks";
 import type { BatchResult, Block, Op, PageData, PageSummary } from "../../shared/types";
 import { getJSON } from "./api";
 import * as outbox from "./outbox";
@@ -14,6 +15,11 @@ export const outline = reactive(new Outline()) as Outline;
 export const pages = reactive(new Map<string, PageSummary>());
 const names = new Map<string, string>(); // display names, including pages not created yet
 const loadedPages = new Set<string>(); // pages a view has loaded; live changes to other pages are skipped
+
+// The pages plain text soft-links to. The list is compared as one string, so the matcher (and
+// every block shown) is only rebuilt when a name is added, removed or renamed.
+const softLinkNames = computed(() => [...pages.values()].map((page) => page.name).filter(softLinkable).sort().join("\n"));
+export const softLinkTargets = computed(() => pageNames(softLinkNames.value.split("\n")));
 
 /** Bumped when views should reload what they show (after missing live updates). */
 export const refreshes = ref(0);

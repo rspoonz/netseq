@@ -1,8 +1,12 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted } from "vue";
+import { linkMentions, softLinksIn } from "../../../shared/softlinks";
 import { historyFor, notify } from "../notices";
+import { outline, softLinkTargets } from "../store";
+import { setContent } from "./intents";
 import { bulletMenu, closeBulletMenu } from "./menu";
 import { copyText } from "./selection";
+import { commit } from "./undo";
 
 // What a bullet's right-click menu offers.
 
@@ -18,6 +22,19 @@ async function copyRef(): Promise<void> {
   if (!id) return;
   const copied = await copyText(`((${id}))`);
   notify(copied ? "Block reference copied: paste it into any block." : "Couldn't copy to the clipboard.");
+}
+
+const hasSoftLinks = computed(() => {
+  const b = bulletMenu.id ? outline.get(bulletMenu.id) : undefined;
+  return b !== undefined && softLinksIn(b.content, softLinkTargets.value).length > 0;
+});
+
+/** Writes the block's soft links as [[links]], as one step that undo takes back. */
+function linkAll(): void {
+  const b = bulletMenu.id ? outline.get(bulletMenu.id) : undefined;
+  closeBulletMenu();
+  const change = b && setContent(outline, b.id, linkMentions(b.content, softLinkTargets.value));
+  if (change) commit(change);
 }
 
 /** On any device, at any time: the device whose text was replaced never gets a notice. */
@@ -45,6 +62,7 @@ onBeforeUnmount(() => {
     @mousedown.stop
   >
     <button type="button" role="menuitem" @click="copyRef">Copy block ref</button>
+    <button v-if="hasSoftLinks" type="button" role="menuitem" @click="linkAll">Link mentions</button>
     <button type="button" role="menuitem" @click="showHistory">Earlier versions</button>
   </div>
 </template>
