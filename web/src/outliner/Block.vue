@@ -4,7 +4,7 @@ import { RouterLink, useRoute, useRouter } from "vue-router";
 import { renderBlock } from "../../../shared/markdown";
 import { pageKey } from "../../../shared/names";
 import { blockRefsIn, queriesIn } from "../../../shared/refs";
-import { blockText, editing, outline, requestBlocks, startEditing } from "../store";
+import { blockText, editing, outline, requestBlocks, softLinkTargets, startEditing } from "../store";
 import BlockRefs from "./BlockRefs.vue";
 import { textBeforePoint } from "./caret";
 import Editor from "./Editor.vue";
@@ -29,7 +29,7 @@ const selected = computed(() => isSelected(props.view, props.id));
 const flashing = computed(() => revealed.view === props.view && revealed.id === props.id);
 // Links to the page being viewed are marked aria-current="page", which screen readers announce.
 const here = computed(() => (route.name === "page" ? pageKey(String(route.params.name ?? "")) : undefined));
-const html = computed(() => renderBlock(block.value?.content ?? "", blockText, here.value));
+const html = computed(() => renderBlock(block.value?.content ?? "", blockText, here.value, softLinkTargets.value));
 // Fetch the text of referenced blocks we don't have yet.
 watchEffect(() => {
   const unknown = blockRefsIn(block.value?.content ?? "").filter((target) => blockText(target) === undefined);

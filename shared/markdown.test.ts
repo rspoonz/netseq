@@ -1,6 +1,7 @@
-import { expect, test } from "bun:test";
+import { describe, expect, test } from "bun:test";
 import MarkdownIt from "markdown-it";
 import { renderBlock, renderMarkdown } from "./markdown";
+import { pageNames, softLinksIn } from "./softlinks";
 
 test("a task gets a checkbox and its marker, and DONE is checked", () => {
   expect(renderBlock("TODO buy milk")).toBe(
@@ -86,4 +87,53 @@ test("ordinary markdown renders exactly as stock markdown-it does (we replaced i
     const ours = renderMarkdown(sample).replaceAll(' target="_blank" rel="noopener noreferrer" class="external"', "");
     expect(ours).toBe(stock.render(sample).trimEnd());
   }
+});
+
+describe("soft links", () => {
+  const names = pageNames(["Alice", "Project X", "Project", "Bob Smith"]);
+  const soft = (html: string) => [...html.matchAll(/<a class="soft-ref" [^>]*data-page="([^"]*)">([^<]*)<\/a>/g)].map((m) => `${m[2]}→${m[1]}`);
+
+  test("a mention of a page's name links to it, showing the text as written", () => {
+    expect(renderBlock("lunch with alice about Project X", undefined, undefined, names)).toBe(
+      '<p>lunch with <a class="soft-ref" href="/page/Alice" data-page="Alice">alice</a> about ' +
+        '<a class="soft-ref" href="/page/Project%20X" data-page="Project X">Project X</a></p>',
+    );
+  });
+
+  test("not in properties, or text inside a ((reference))", () => {
+    expect(soft(renderBlock("Alice\nwho:: Alice", undefined, undefined, names))).toEqual(["Alice→Alice"]);
+    expect(soft(renderBlock(`see ((${TARGET}))`, () => "Alice", undefined, names))).toEqual([]);
+  });
+
+  test("a mention of the page being viewed is a soft link too, marked as the current page", () => {
+    expect(renderBlock("ask alice", undefined, "alice", names)).toBe(
+      '<p>ask <a class="soft-ref" href="/page/Alice" data-page="Alice" aria-current="page">alice</a></p>',
+    );
+  });
+
+  test("the renderer links exactly what Link mentions would link", () => {
+    const samples = [
+      "TODO [#A] call Alice about Project X\nSCHEDULED: <2026-11-02 Mon>\nstatus:: Alice",
+      "# Alice\n\n- Project X\n- *Alice* and **Project**\n\n> Bob Smith said",
+      "[Alice](https://example.com) [[Alice]] #Alice `Alice` https://example.com/Alice Alice",
+      "| who | what |\n| --- | --- |\n| Alice | Project X |",
+      "```\nAlice\n```\nAlice\\\nBob Smith\nBob\nSmith",
+      "{{query Alice}} ((6f1c2a7e-3b4d-4c5e-8f90-a1b2c3d4e5f6)) Alice&amp;Bob Smith <b>Alice</b>",
+    ];
+    for (const content of samples) {
+      const linked = softLinksIn(content, names).map((m) => `${content.slice(m.start, m.end)}→${m.name}`);
+      expect(soft(renderBlock(content, () => "x", undefined, names))).toEqual(linked);
+    }
+  });
+
+  test("an image's description keeps its text", () => {
+    const content = "![photo of Alice at the beach](https://example.com/a.png)";
+    expect(renderBlock(content, undefined, undefined, names)).toBe(renderBlock(content));
+    expect(renderBlock(content, undefined, undefined, names)).toContain('alt="photo of Alice at the beach"');
+  });
+
+  test("without names, nothing changes", () => {
+    const content = "lunch with Alice";
+    expect(renderBlock(content, undefined, undefined, pageNames([]))).toBe(renderBlock(content));
+  });
 });

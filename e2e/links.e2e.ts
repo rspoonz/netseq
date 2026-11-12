@@ -312,3 +312,47 @@ test("references that follow each other with the same breadcrumb share it", asyn
   await expect(refs.locator(".block-row")).toHaveCount(6);
   await expect(refs.locator(".ref-root").nth(1).locator(".block-content")).toHaveText([`a1 ${target}`, `a2 ${target}`]);
 });
+
+test("a page's name in plain text is a soft link: it opens the page, and Link mentions makes it a reference", async ({ page, request }) => {
+  const [target, source] = [unique("Soft"), unique("Source")];
+  await createPage(request, target, ["the target page"]);
+  await createPage(request, source, [`lunch with ${target.toLowerCase()} today`]);
+  await page.goto(`/page/${encodeURIComponent(source)}`);
+
+  // Shown as written, and it opens the page.
+  await expect(page.locator(".block-content a.soft-ref")).toHaveText(target.toLowerCase());
+  await page.locator(".block-content a.soft-ref").click();
+  await expect(page.getByRole("heading", { level: 1 })).toHaveText(target);
+
+  // Not a reference yet: the page lists it as unlinked, still as a soft link.
+  await expect(page.locator(".linked-refs")).toHaveCount(0);
+  await page.getByRole("button", { name: "1 unlinked reference" }).click();
+  const unlinked = page.locator(".unlinked-refs");
+  await expect(unlinked.locator("a.soft-ref")).toHaveText(target.toLowerCase());
+
+  // Only blocks with soft links offer to link them.
+  await page.locator(".outline").first().getByLabel("Zoom in").click({ button: "right" });
+  await expect(page.getByRole("menuitem", { name: "Copy block ref" })).toBeVisible();
+  await expect(page.getByRole("menuitem", { name: "Link mentions" })).toHaveCount(0);
+  await page.keyboard.press("Escape");
+
+  // Linked from the list: it becomes a linked reference.
+  await unlinked.getByLabel("Zoom in").click({ button: "right" });
+  await page.getByRole("menuitem", { name: "Link mentions" }).click();
+  await expectSaved(page);
+  await expect(page.locator(".linked-refs h2")).toHaveText("1 linked reference");
+  await expect(page.locator(".linked-refs .block-content a.page-ref")).toHaveText(target.toLowerCase());
+  await expect(page.locator(".unlinked-refs")).toHaveCount(0);
+
+  // Undo takes it back to plain text, and redo links it again.
+  await page.keyboard.press("Control+z");
+  await expect(page.getByRole("button", { name: "1 unlinked reference" })).toBeVisible();
+  await expect(page.locator(".linked-refs")).toHaveCount(0);
+  await page.keyboard.press("Control+Shift+z");
+  await expect(page.locator(".linked-refs h2")).toHaveText("1 linked reference");
+  await expectSaved(page);
+
+  await page.goto(`/page/${encodeURIComponent(source)}`);
+  await expect(page.locator(".block-content a.page-ref")).toHaveText(target.toLowerCase());
+  await expect(page.locator(".block-content a.soft-ref")).toHaveCount(0);
+});

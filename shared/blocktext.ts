@@ -66,6 +66,21 @@ export function parseBlock(content: string): BlockInfo {
   return info;
 }
 
+/**
+ * The block's text with what parseBlock takes out of the body (the task marker, date lines and
+ * property lines) blanked with spaces. Same length, so positions in it are positions in the text.
+ */
+export function proseOnly(content: string): string {
+  const prefix = MARKER_PREFIX.exec(content)?.[0] ?? "";
+  let prose = " ".repeat(prefix.length);
+  for (const line of contentLines(content.slice(prefix.length))) {
+    const date = line.code ? null : DATE_LINE.exec(line.text);
+    const meta = (date && toDay(date[2], date[3], date[4])) || (!line.code && PROPERTY_LINE.test(line.text));
+    prose += (line.offset === 0 ? "" : "\n") + (meta ? " ".repeat(line.text.length) : line.text);
+  }
+  return prose;
+}
+
 function toDay(year: string, month: string, day: string): number | null {
   const [m, d] = [Number(month), Number(day)];
   return m >= 1 && m <= 12 && d >= 1 && d <= 31 ? Number(year + month + day) : null;

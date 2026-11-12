@@ -14,8 +14,10 @@ import { runQuery } from "../server/query";
 import { getJournals, getLinkedRefs, getPage, getRecentPages, RECENT_PAGES } from "../server/read";
 import { getAgenda, getUnlinkedRefs, search } from "../server/search";
 import { formatDate } from "../shared/blocktext";
-import { dayNumber, journalName } from "../shared/names";
+import { renderBlock } from "../shared/markdown";
+import { dayNumber, journalName, pageKey } from "../shared/names";
 import { keysBetween } from "../shared/order";
+import { pageNames } from "../shared/softlinks";
 import type { Op } from "../shared/types";
 
 const PAGES = 700; // × 100 blocks
@@ -155,6 +157,16 @@ try {
     renamePage(db, name, `${name} renamed`);
     renamePage(db, `${name} renamed`, name);
   }, 2);
+  // What the browser does per block shown: here with two plain-text mentions of page names in each.
+  const allNames = (db.query("SELECT name FROM pages").all() as { name: string }[]).map((row) => row.name);
+  const bigTexts = (db.query("SELECT content FROM blocks WHERE page = ?").all(pageKey(BIG_PAGE)) as { content: string }[]).map(
+    ({ content }) => `${content} with Page ${pick(PAGES)} and page ${pick(PAGES)}`,
+  );
+  time(`soft links: index ${allNames.length} page names`, 100, () => pageNames(allNames));
+  const names = pageNames(allNames);
+  time("render 2,000 blocks with soft links", 500, () => {
+    for (const text of bigTexts) renderBlock(text, undefined, undefined, names);
+  });
   time("backup (once a day; the server waits)", 1000, () => backupNow(db, join(root, "bench-backups"), "netseq"), 1);
   time("export (own process; the server doesn't wait)", null, () => exportMarkdown(db, join(root, "export")), 1);
   db.close();
