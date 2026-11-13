@@ -28,8 +28,8 @@ function outlineOf(text: string): Outline {
   return o;
 }
 
-/** The outline as indented text again; empty blocks show as "·". */
-function textOf(o: Outline): string {
+/** A page's outline as indented text again; empty blocks show as "·". */
+function textOf(o: Outline, page = PAGE): string {
   const lines: string[] = [];
   const walk = (key: string, depth: number) => {
     for (const id of o.childIds(key)) {
@@ -38,7 +38,7 @@ function textOf(o: Outline): string {
       walk(id, depth + 1);
     }
   };
-  walk(topKey(PAGE), 0);
+  walk(topKey(page), 0);
   return lines.join("\n");
 }
 
@@ -190,6 +190,33 @@ describe("moving and collapsing", () => {
     apply(o, intents.setCollapsed(o, "a", true));
     expect(textOf(o)).toBe("a+\n  b");
     expect(intents.setCollapsed(o, "b", true)).toBeNull();
+  });
+});
+
+describe("moving to a page", () => {
+  test("a block and everything under it go to the end of the other page's top level", () => {
+    const o = outlineOf("a\nb+\n  c\n    d\ne");
+    o.upsert({ id: "x", page: "other", parent: null, order_key: "a0", content: "x", collapsed: false, rev: 1 });
+    const change = apply(o, intents.moveToPage(o, "b", "other"));
+    expect(textOf(o)).toBe("a\ne");
+    expect(textOf(o, "other")).toBe("x\nb+\n  c\n    d");
+    expect(["b", "c", "d"].map((id) => o.get(id)?.page)).toEqual(["other", "other", "other"]);
+    expect(change.upserts.map((b) => b.id)).toEqual(["b", "c", "d"]); // every one of them, so undo puts them all back
+    expect(change.caret).toBeUndefined();
+  });
+
+  test("to an empty page, and to its own page's top level", () => {
+    const o = outlineOf("a\n  b\n    c\nd");
+    apply(o, intents.moveToPage(o, "b", PAGE));
+    expect(textOf(o)).toBe("a\nd\nb\n  c");
+    apply(o, intents.moveToPage(o, "a", "new"));
+    expect(textOf(o, "new")).toBe("a");
+  });
+
+  test("nothing to do when it's already last on that page's top level, or doesn't exist", () => {
+    const o = outlineOf("a\nb");
+    expect(intents.moveToPage(o, "b", PAGE)).toBeNull();
+    expect(intents.moveToPage(o, "nope", PAGE)).toBeNull();
   });
 });
 

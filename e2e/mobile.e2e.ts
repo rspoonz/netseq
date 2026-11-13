@@ -39,6 +39,7 @@ test("the toolbar's ⋯ opens the block menu, which iPhones can't open by long-p
   await page.getByRole("button", { name: "Block menu" }).tap();
   const menu = page.getByRole("menu");
   await expect(menu).toBeInViewport({ ratio: 1 }); // above the toolbar, not off the edge
+  await expect(menu.getByRole("menuitem", { name: "Move to page…" })).toBeVisible();
   await menu.getByRole("menuitem", { name: "Earlier versions" }).tap();
   await expect(page.getByRole("dialog", { name: "Earlier versions" })).toBeVisible();
 });

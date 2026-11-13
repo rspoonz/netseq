@@ -1,7 +1,7 @@
 import { nextMarker, parseBlock, setMarker } from "../../../shared/blocktext";
 import { keyBetween, keysBetween } from "../../../shared/order";
 import type { Block } from "../../../shared/types";
-import { type Outline, parentKey } from "./outline";
+import { type Outline, parentKey, topKey } from "./outline";
 import { randomUUID } from "../uuid";
 
 // Editing operations as pure functions. Each looks at the outline and returns the blocks to
@@ -216,6 +216,21 @@ export function moveDown(o: Outline, id: string, offset: number, scope?: string 
   if (!b || !next) return null;
   const order_key = keyBetween(next.order_key, nextSibling(o, next)?.order_key ?? null);
   return { upserts: [{ ...b, order_key }], deletes: [], caret: { id, offset } };
+}
+
+/**
+ * Moves a block, with everything under it, to the end of a page's top level (`page` is its key).
+ * The blocks under it are written with the new page too, so undo puts every one of them back.
+ */
+export function moveToPage(o: Outline, id: string, page: string): Change | null {
+  const b = o.get(id);
+  if (!b) return null;
+  const top = o.childIds(topKey(page));
+  if (b.page === page && b.parent === null && top.at(-1) === id) return null; // already there
+  const last = o.get(top.filter((sid) => sid !== id).at(-1) ?? "");
+  const upserts: Block[] = [{ ...b, page, parent: null, order_key: keyBetween(last?.order_key ?? null, null) }];
+  for (const sub of o.subtree(id).slice(1)) upserts.push({ ...o.get(sub)!, page });
+  return { upserts, deletes: [] };
 }
 
 export function setCollapsed(o: Outline, id: string, collapsed: boolean, offset?: number): Change | null {

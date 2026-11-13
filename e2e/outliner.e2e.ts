@@ -1,5 +1,5 @@
 import { expect, test } from "@playwright/test";
-import { expectSaved, openFreshPage, outlineText, startWriting } from "./helpers";
+import { createPage, expectSaved, openFreshPage, outlineText, startWriting, unique } from "./helpers";
 
 test("typing, Enter and Tab build an outline that survives a reload", async ({ page }) => {
   await openFreshPage(page);
@@ -61,6 +61,41 @@ test("blocks move with Alt+Shift+arrows, and undo puts them back", async ({ page
   expect(await outlineText(page)).toBe("a\nb\nc");
   await page.keyboard.press("Control+Shift+z");
   expect(await outlineText(page)).toBe("a\nc\nb");
+});
+
+test("the bullet menu moves a block, with everything under it, to the end of another page", async ({ page, request }) => {
+  const target = unique("Move target");
+  await createPage(request, target, ["already here"]);
+  await openFreshPage(page);
+  await startWriting(page);
+  for (const [i, text] of ["stays", "moves", "child"].entries()) {
+    if (i > 0) await page.keyboard.press("Enter");
+    await page.keyboard.type(text);
+  }
+  await page.keyboard.press("Tab");
+  await page.locator(".block-bullet").nth(1).click({ button: "right" });
+  await page.getByRole("menuitem", { name: "Move to page…" }).click();
+  const picker = page.getByRole("dialog", { name: "Move to page" });
+  await picker.getByRole("searchbox").fill(target);
+  await expect(picker.getByRole("option")).toHaveCount(1); // pages only: no blocks, and no "New page" for one that exists
+  await expect(picker.getByRole("option")).toContainText(target);
+  await page.keyboard.press("Enter");
+  await expect(page.locator(".notice")).toContainText(`Moved to ${target}.`);
+  expect(await outlineText(page)).toBe("stays");
+  await page.keyboard.press("Control+k"); // the palette is back to searching
+  await expect(page.getByRole("dialog", { name: "Search" })).toBeVisible();
+  await page.keyboard.press("Escape");
+
+  await page.keyboard.press("Control+z");
+  await expect(page.locator(".block-content")).toHaveText(["stays", "moves", "child"]);
+  expect(await outlineText(page)).toBe("stays\nmoves\n  child");
+  await page.keyboard.press("Control+Shift+z");
+  await expect(page.locator(".block-content")).toHaveText(["stays"]);
+
+  await expectSaved(page);
+  await page.goto(`/page/${encodeURIComponent(target)}`);
+  await expect(page.locator(".block-content")).toHaveText(["already here", "moves", "child"]);
+  expect(await outlineText(page)).toBe("already here\nmoves\n  child");
 });
 
 test("deleting selected blocks can be undone and redone without opening a block", async ({ page }) => {

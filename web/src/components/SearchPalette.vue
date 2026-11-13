@@ -11,7 +11,7 @@ import { pages } from "../store";
 
 // Search pages (by name, in the browser) and blocks (by text, on the server). Opening a block
 // zooms into it. Before anything is typed it lists the favourites, so Ctrl+K then Enter (or a
-// few ↓) opens one.
+// few ↓) opens one. To choose a page for something else (see pickPage) it lists only pages.
 
 type Item = { kind: "favourite" | "page" | "new"; name: string } | { kind: "block"; hit: SearchHit };
 const KINDS = { favourite: "Favourite", page: "Page", new: "New page" };
@@ -30,7 +30,7 @@ const items = computed((): Item[] => {
   if (!q) return favourites.value.map((page) => ({ kind: "favourite", name: page.name }));
   const names = matchPages([...pages.values()].map((page) => page.name), q, 10);
   const list: Item[] = names.map((name) => ({ kind: "page", name }));
-  for (const hit of hits.value) list.push({ kind: "block", hit });
+  if (!palette.pick) for (const hit of hits.value) list.push({ kind: "block", hit });
   if (!pages.has(pageKey(q))) list.push({ kind: "new", name: q });
   return list;
 });
@@ -41,7 +41,7 @@ watch(query, (q) => {
   timer = setTimeout(async () => {
     const call = ++latest;
     let failed = false;
-    const result = q.trim() ? await fetchSearch(q).catch(() => ((failed = true), [])) : [];
+    const result = q.trim() && !palette.pick ? await fetchSearch(q).catch(() => ((failed = true), [])) : [];
     if (call === latest) {
       hits.value = result;
       searchFailed.value = failed; // page names still show: they're already in the browser
@@ -52,7 +52,10 @@ watch(query, (q) => {
 watch(
   () => palette.open,
   async (open) => {
-    if (!open) return;
+    if (!open) {
+      palette.pick = null; // however it was closed, it opens for searching next time
+      return;
+    }
     query.value = "";
     hits.value = [];
     await nextTick();
@@ -65,8 +68,10 @@ function close(): void {
 }
 
 function choose(item: Item): void {
+  const pick = palette.pick;
   close();
   if (item.kind === "block") void router.push({ name: "block", params: { id: item.hit.id } });
+  else if (pick) pick.choose(item.name);
   else void router.push({ name: "page", params: { name: item.name } });
 }
 
@@ -100,14 +105,14 @@ function onKeydown(event: KeyboardEvent): void {
 
 <template>
   <div v-if="palette.open" class="palette-backdrop" @mousedown.self="close">
-    <div class="palette" role="dialog" aria-label="Search">
+    <div class="palette" role="dialog" :aria-label="palette.pick?.title ?? 'Search'">
       <input
         ref="input"
         v-model="query"
         class="palette-input"
         type="search"
-        placeholder="Search pages and blocks"
-        aria-label="Search"
+        :placeholder="palette.pick ? `${palette.pick.title}…` : 'Search pages and blocks'"
+        :aria-label="palette.pick?.title ?? 'Search'"
         autocomplete="off"
         @keydown="onKeydown"
       />
