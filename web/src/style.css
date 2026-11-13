@@ -1096,9 +1096,22 @@ h1.renamable {
   line-clamp: 2;
 }
 
-/* Zooming in: the trail from the page down to the block, at full size */
+/* Zooming in: the trail from the page down to the block, at full size, and the block's ⋯ at the end of the line */
 .zoom-header {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.5rem;
   margin-bottom: 1rem;
+}
+
+.zoom-header .crumbs {
+  flex: 1;
+  min-width: 0;
+}
+
+/* The ⋯ centres on the trail's first line without making it taller, and lines up with the edge */
+.zoom-header .icon-button {
+  margin: -0.375rem -0.5rem -0.375rem 0;
 }
 
 /* Every step of a trail is a link, so all are blue; the page it starts from is bold. */
