@@ -755,12 +755,15 @@ h1.renamable {
 
 .task {
   display: flex;
-  align-items: baseline;
+  align-items: flex-start; /* each item starts on the first line; the marker inherits its 1.5rem line height, so it centres like the text */
   gap: 0.35rem;
 }
 
 .task-check {
-  margin: 0; /* on the first line's baseline, like the marker, also when the text wraps */
+  flex: none;
+  width: 1rem;
+  height: 1rem;
+  margin: 0.25rem 0; /* centred on the first line (1.5rem tall), also when the text wraps; doesn't depend on the browser's checkbox baseline */
   cursor: pointer;
 }
 
@@ -794,6 +797,7 @@ h1.renamable {
   font-size: 0.75rem;
   font-weight: 600;
   line-height: 1.4;
+  vertical-align: 0.125rem; /* on the same line as the task marker beside it, which sits that much above the text's baseline */
   color: var(--bg);
   background: var(--muted);
 }
