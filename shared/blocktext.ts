@@ -128,6 +128,14 @@ export function setDate(content: string, kind: DateKind, day: string): string {
 }
 
 /**
+ * The line a block goes by in a short label (a block reference, a breadcrumb step): the first
+ * line of its body with any text, without heading marks. So no task marker, dates or properties.
+ */
+export function firstLine(content: string): string {
+  return (parseBlock(content).body.split("\n").find((line) => line.trim()) ?? "").replace(/^#{1,6}\s+/, "");
+}
+
+/**
  * The block's text without markup that gets in the way of searching: [[ ]] around page names,
  * **, ~~, ==, `. Block references and macros such as {{query …}} are left out: they aren't prose.
  */

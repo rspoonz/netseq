@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { RouterLink } from "vue-router";
-import { plainText } from "../../../shared/blocktext";
+import { firstLine, plainText, PRIORITY } from "../../../shared/blocktext";
 import { journalTitle } from "../../../shared/names";
 import type { Crumb } from "../../../shared/types";
 
@@ -9,8 +9,9 @@ import type { Crumb } from "../../../shared/types";
 // trail (a navigation landmark), rather than one of many in a list.
 defineProps<{ path: Crumb[]; page?: { name: string; at: string }; landmark?: boolean }>();
 
+/** The block's first line as plain text (see firstLine), without its priority: a trail can't show the badge. */
 function label(content: string): string {
-  const line = plainText(content.split("\n")[0]).trim();
+  const line = plainText(firstLine(content).replace(PRIORITY, "")).replace(/\s+/g, " ").trim();
   return line.length > 40 ? `${line.slice(0, 40)}…` : line || "…";
 }
 </script>

@@ -45,6 +45,12 @@ test("a block reference shows the referenced block's first line", () => {
   );
 });
 
+test("a block reference to a heading shows its words, without the #s", () => {
+  expect(renderBlock(`((${TARGET}))`, () => "## Meeting notes")).toBe(
+    `<p><a class="block-ref" href="/b/${TARGET}" data-block-ref="${TARGET}">Meeting notes</a></p>`,
+  );
+});
+
 test("links inside a block reference are text, so the whole reference leads to its block", () => {
   const html = renderBlock(`((${TARGET}))`, () => "https://example.com/music and [docs](https://example.com/docs) #tag");
   expect(html).toBe(

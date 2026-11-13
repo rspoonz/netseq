@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { nextMarker, parseBlock, plainText, propertyValues, searchText, setDate, setMarker } from "./blocktext";
+import { firstLine, nextMarker, parseBlock, plainText, propertyValues, searchText, setDate, setMarker } from "./blocktext";
 
 describe("parseBlock", () => {
   test("a task marker at the start, and a priority on the first line", () => {
@@ -65,6 +65,17 @@ describe("editing markers and dates", () => {
     expect(setDate("TODO report\nSCHEDULED: <2026-11-02 Mon>", "DEADLINE", "2026-11-06")).toBe(
       "TODO report\nDEADLINE: <2026-11-06 Fri>\nSCHEDULED: <2026-11-02 Mon>",
     );
+  });
+});
+
+describe("firstLine", () => {
+  test("the first line with text, without heading marks, task marker, dates or properties", () => {
+    expect(firstLine("## Meeting notes\nmore")).toBe("Meeting notes");
+    expect(firstLine("TODO [#A] call Ann\nSCHEDULED: <2026-11-02 Mon>")).toBe("[#A] call Ann");
+    expect(firstLine("status:: draft\nThe real text")).toBe("The real text");
+    expect(firstLine("\n  \nafter blank lines")).toBe("after blank lines");
+    expect(firstLine("#tag is not a heading")).toBe("#tag is not a heading");
+    expect(firstLine("")).toBe("");
   });
 });
 
