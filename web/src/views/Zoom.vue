@@ -5,7 +5,7 @@ import { fetchBlockTree } from "../api";
 import Block from "../outliner/Block.vue";
 import Crumbs from "../outliner/Crumbs.vue";
 import { openBulletMenu } from "../outliner/menu";
-import { applyTree, outline, refreshes, rememberPageName } from "../store";
+import { applyTree, changes, outline, refreshes, rememberPageName } from "../store";
 
 // One block with everything under it, under a breadcrumb trail: its page (which opens at the
 // block), then the blocks it sits inside. The ⋯ beside the trail opens the block's menu, so a
@@ -38,6 +38,13 @@ watch(
   { immediate: true },
 );
 watch(refreshes, load);
+// A move (from here, or another tab or device) leaves the trail showing where the block was:
+// fetch it again once the server has the change.
+watch(changes, () => {
+  const b = outline.get(props.id);
+  const shown = tree.value;
+  if (b && shown && (b.page !== shown.page.key || b.parent !== (shown.path.at(-1)?.id ?? null))) void load();
+});
 
 /** Opens the block menu just below the ⋯, lined up with its right edge so it stays on screen. */
 function openMenu(event: MouseEvent): void {
