@@ -1,5 +1,5 @@
 import MarkdownIt, { type StateInline } from "markdown-it";
-import { parseBlock, PRIORITY } from "./blocktext";
+import { firstLine, parseBlock, PRIORITY } from "./blocktext";
 import { dayName, journalTitle, pageKey } from "./names";
 import { matchBlockRef, matchMacro, matchPageRef, matchTag } from "./refs";
 import { type Mention, mentions, type PageNames } from "./softlinks";
@@ -67,8 +67,7 @@ md.renderer.rules.block_ref = (tokens, index, _options, env) => {
   const text = blockText?.(tokens[index].content);
   if (text === undefined) return link("block-ref", "…");
   if (text === null) return link("block-ref missing", "missing block");
-  const line = (parseBlock(text).body.split("\n").find((l) => l.trim()) ?? "").replace(/^#{1,6}\s+/, "");
-  return link("block-ref", md.renderInline(line, { nested: true } satisfies RenderEnv));
+  return link("block-ref", md.renderInline(firstLine(text), { nested: true } satisfies RenderEnv));
 };
 
 md.inline.ruler.before("link", "page_ref", (state: StateInline, silent: boolean) => {

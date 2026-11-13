@@ -1,5 +1,5 @@
 import { expect, test } from "@playwright/test";
-import { openFreshPage, outlineText, startWriting } from "./helpers";
+import { createPage, expectSaved, openFreshPage, outlineText, startWriting, unique } from "./helpers";
 
 test("the toolbar indents without closing the keyboard", async ({ page }) => {
   await openFreshPage(page);
@@ -42,6 +42,31 @@ test("the toolbar's ⋯ opens the block menu, which iPhones can't open by long-p
   await expect(menu.getByRole("menuitem", { name: "Move to page…" })).toBeVisible();
   await menu.getByRole("menuitem", { name: "Earlier versions" }).tap();
   await expect(page.getByRole("dialog", { name: "Earlier versions" })).toBeVisible();
+});
+
+test("zoomed in, the ⋯ beside the trail opens the block menu without editing the block", async ({ page, request }) => {
+  const source = unique("Zoom source");
+  const target = unique("Zoom target");
+  await createPage(request, source, ["moves"]);
+  await createPage(request, target, ["already here"]);
+  await page.goto(`/page/${encodeURIComponent(source)}`);
+  await page.locator(".block-bullet").tap();
+  await expect(page).toHaveURL(/\/b\//);
+
+  await page.locator(".zoom-header").getByRole("button", { name: "Block menu" }).tap();
+  const menu = page.getByRole("menu");
+  await expect(menu).toBeInViewport({ ratio: 1 }); // below the ⋯, not off the right edge
+  await expect(page.locator("textarea.block-editor")).toHaveCount(0); // no keyboard needed
+  await menu.getByRole("menuitem", { name: "Move to page…" }).tap();
+  const picker = page.getByRole("dialog", { name: "Move to page" });
+  await picker.getByRole("searchbox").fill(target);
+  await expect(picker.getByRole("option")).toContainText(target);
+  await page.keyboard.press("Enter");
+  await expect(page.locator(".notice")).toContainText(`Moved to ${target}.`);
+
+  await expectSaved(page);
+  await page.goto(`/page/${encodeURIComponent(target)}`);
+  await expect(page.locator(".block-content")).toHaveText(["already here", "moves"]);
 });
 
 test("☰ opens the favourites over the notes; picking one opens it and closes them", async ({ page, request }) => {

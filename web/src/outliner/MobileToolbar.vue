@@ -29,7 +29,7 @@ function press(action: Command | "menu", event: PointerEvent): void {
   }
   if (!editing.id) return;
   const button = (event.currentTarget as HTMLElement).getBoundingClientRect();
-  openBulletMenu(editing.id, button.right, button.top, true);
+  openBulletMenu(editing.id, button.right, button.top, "bottom-right");
 }
 
 const touch = window.matchMedia("(pointer: coarse)").matches;

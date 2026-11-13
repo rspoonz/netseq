@@ -191,6 +191,23 @@ test("the Pages tab lists pages created elsewhere without a reload", async ({ pa
   await expect(page.getByRole("link", { name })).toBeVisible();
 });
 
+test("breadcrumb steps show a block's words, not its heading marks, task marker or dates", async ({ page, request }) => {
+  const name = unique("Crumb labels");
+  const [heading, task, detail] = [crypto.randomUUID(), crypto.randomUUID(), crypto.randomUUID()];
+  const op = (id: string, parent: string | null, content: string) => ({
+    t: "block", id, page: name, parent, order_key: "a0", content, collapsed: false, base: 0,
+  });
+  const ops = [
+    op(heading, null, "## Meeting notes"),
+    op(task, heading, "TODO [#A] call **Ann**\nSCHEDULED: <2026-11-16 Mon>"),
+    op(detail, task, "detail"),
+  ];
+  expect((await request.post("/api/batch", { data: { writer: "e2e", device: "Playwright", ops } })).ok()).toBe(true);
+
+  await page.goto(`/b/${detail}`);
+  await expect(page.locator(".zoom-header .crumbs")).toHaveText(`${name}›Meeting notes›call Ann`);
+});
+
 test("the page in a zoomed-in block's breadcrumbs opens the page at that block", async ({ page, request }) => {
   const name = unique("Long page");
   const base62 = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz";

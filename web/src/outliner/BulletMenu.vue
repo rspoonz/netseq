@@ -14,11 +14,10 @@ import { commit } from "./undo";
 
 // What a bullet's right-click menu offers.
 
-const position = computed(() =>
-  bulletMenu.above
-    ? { right: `${window.innerWidth - bulletMenu.x}px`, bottom: `${window.innerHeight - bulletMenu.y}px` }
-    : { left: `${bulletMenu.x}px`, top: `${bulletMenu.y}px` },
-);
+const position = computed(() => ({
+  ...(bulletMenu.corner === "top-left" ? { left: `${bulletMenu.x}px` } : { right: `${window.innerWidth - bulletMenu.x}px` }),
+  ...(bulletMenu.corner === "bottom-right" ? { bottom: `${window.innerHeight - bulletMenu.y}px` } : { top: `${bulletMenu.y}px` }),
+}));
 
 async function copyRef(): Promise<void> {
   const id = bulletMenu.id;

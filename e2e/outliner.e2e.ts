@@ -98,6 +98,33 @@ test("the bullet menu moves a block, with everything under it, to the end of ano
   expect(await outlineText(page)).toBe("already here\nmoves\n  child");
 });
 
+test("moving a zoomed-in block to another page updates its breadcrumb trail", async ({ page, request }) => {
+  const source = unique("Trail source");
+  const target = unique("Trail target");
+  await createPage(request, target, ["already here"]);
+  const [parent, child] = [crypto.randomUUID(), crypto.randomUUID()];
+  const op = (id: string, under: string | null, content: string) => ({
+    t: "block", id, page: source, parent: under, order_key: "a0", content, collapsed: false, base: 0,
+  });
+  const ops = [op(parent, null, "parent"), op(child, parent, "child")];
+  expect((await request.post("/api/batch", { data: { writer: "e2e", device: "Playwright", ops } })).ok()).toBe(true);
+
+  await page.goto(`/b/${child}`);
+  const trail = page.locator(".zoom-header .crumbs");
+  await expect(trail).toHaveText(`${source}›parent`);
+  await page.locator(".zoom-header").getByRole("button", { name: "Block menu" }).click();
+  await page.getByRole("menuitem", { name: "Move to page…" }).click();
+  const picker = page.getByRole("dialog", { name: "Move to page" });
+  await picker.getByRole("searchbox").fill(target);
+  await expect(picker.getByRole("option")).toContainText(target);
+  await page.keyboard.press("Enter");
+  await expect(page.locator(".notice")).toContainText(`Moved to ${target}.`);
+  await expect(trail).toHaveText(target); // now at the top of the target page
+
+  await trail.getByRole("link", { name: target }).click();
+  await expect(page.locator(".block-content")).toHaveText(["already here", "child"]);
+});
+
 test("deleting selected blocks can be undone and redone without opening a block", async ({ page }) => {
   await openFreshPage(page);
   await startWriting(page);
