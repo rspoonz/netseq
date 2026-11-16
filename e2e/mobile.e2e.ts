@@ -16,6 +16,18 @@ test("the toolbar indents without closing the keyboard", async ({ page }) => {
   expect(await outlineText(page)).toBe("one\ntwo");
 });
 
+// On a page that can't scroll, iOS shifts the whole screen to make room for the keyboard, and the
+// toolbar sinks behind it. Playwright has no on-screen keyboard, so this checks the room is there.
+test("a short page can scroll up out of the keyboard's way", async ({ page }) => {
+  await openFreshPage(page);
+  await startWriting(page);
+  await page.keyboard.type("one block");
+
+  const room = await page.evaluate(() => document.documentElement.scrollHeight - window.innerHeight);
+  const height = await page.evaluate(() => window.innerHeight);
+  expect(room).toBeGreaterThanOrEqual(height / 2);
+});
+
 test("collapse arrows show without hovering, and tapping one folds the block", async ({ page }) => {
   await openFreshPage(page);
   await startWriting(page);

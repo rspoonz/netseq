@@ -460,7 +460,13 @@ h1,
 
 @media (pointer: coarse) {
   .content {
-    padding-bottom: calc(6rem + var(--safe-bottom)); /* room for the toolbar */
+    /* However short a page, it scrolls, so a block can move up out of the keyboard's way, as on
+       the journals. A page that can't scroll makes iOS shift the whole screen up instead, which
+       takes the top bar off the screen and sinks the toolbar behind iOS's ⌃ ⌄ ✓ bar and the
+       keyboard. 60vh is more than the keyboard, that bar and the toolbar together on a phone
+       held upright: the room below the last block, and how far even a short page scrolls. */
+    min-height: 160vh;
+    padding-bottom: 60vh;
   }
 
   .block-toggle {
