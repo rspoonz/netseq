@@ -60,7 +60,7 @@ test("text replaced by another device can be restored from its history", async (
 
   // The laptop, whose text was replaced, gets no notice: its bullet menu has the earlier versions.
   await onLaptop.locator(".block-bullet").first().click({ button: "right" });
-  await onLaptop.getByRole("menuitem", { name: "Earlier versions" }).click();
+  await onLaptop.getByRole("menuitem", { name: "View earlier versions" }).click();
   const history = onLaptop.getByRole("dialog", { name: "Earlier versions" });
   await expect(history).toContainText("Kept for 30 days");
   await expect(history).toContainText("original + laptop");
