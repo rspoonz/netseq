@@ -94,7 +94,7 @@ or, after a block:
   "agent": "Claude" }
 ```
 
-`content` is the block's whole new text, every line of it, without the outline's indentation or `id::` lines. It's not an outline. In `expect`, indentation and `id::` lines copied from the outline don't matter. If the block no longer says what you expected, nothing changes and the answer is a 409 with its current text, `{"error": "…", "content": "…"}`: check that your edit still makes sense, then send it again with the new `expect`. The text an edit replaces is kept in the block's history ("Earlier versions" in its bullet menu) for 30 days. The answer is `{"id": "…", "page": "…"}`.
+`content` is the block's whole new text, every line of it, without the outline's indentation or `id::` lines. It's not an outline. In `expect`, indentation and `id::` lines copied from the outline don't matter. If the block no longer says what you expected, nothing changes and the answer is a 409 with its current text, `{"error": "…", "content": "…"}`: check that your edit still makes sense, then send it again with the new `expect`. The text an edit replaces is kept in the block's history ("View earlier versions" in its bullet menu) for 30 days. The answer is `{"id": "…", "page": "…"}`.
 
 `POST /api/agent/move`: moves a block and everything under it. It keeps its id, so `((refs))` to it still work. Give `id` and exactly one of these:
 

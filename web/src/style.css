@@ -1082,6 +1082,16 @@ h1.renamable {
   background: color-mix(in srgb, var(--accent) 15%, transparent);
 }
 
+.bullet-menu button.danger {
+  color: var(--danger);
+}
+
+.bullet-menu hr {
+  margin: 0.25rem 0;
+  border: 0;
+  border-top: 1px solid var(--border);
+}
+
 /* Block suggestions after ((: wider, and each one up to two lines */
 .ref-popup.blocks {
   width: min(32rem, 90vw);

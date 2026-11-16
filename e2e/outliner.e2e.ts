@@ -125,6 +125,40 @@ test("moving a zoomed-in block to another page updates its breadcrumb trail", as
   await expect(page.locator(".block-content")).toHaveText(["already here", "child"]);
 });
 
+test("the bullet menu deletes a block with everything under it, and undo brings it back", async ({ page }) => {
+  await openFreshPage(page);
+  await startWriting(page);
+  for (const [i, text] of ["stays", "goes", "child"].entries()) {
+    if (i > 0) await page.keyboard.press("Enter");
+    await page.keyboard.type(text);
+  }
+  await page.keyboard.press("Tab");
+  await page.locator(".block-bullet").nth(1).click({ button: "right" });
+  await page.getByRole("menuitem", { name: "Delete block" }).click();
+  await expect(page.locator(".block-content")).toHaveText(["stays"]);
+
+  await page.keyboard.press("Control+z");
+  await expect(page.locator(".block-content")).toHaveText(["stays", "goes", "child"]);
+  expect(await outlineText(page)).toBe("stays\ngoes\n  child");
+});
+
+test("deleting a zoomed-in block from its menu goes to its page, at the block it was under", async ({ page, request }) => {
+  const source = unique("Delete zoomed");
+  const [parent, child] = [crypto.randomUUID(), crypto.randomUUID()];
+  const op = (id: string, under: string | null, content: string) => ({
+    t: "block", id, page: source, parent: under, order_key: "a0", content, collapsed: false, base: 0,
+  });
+  const ops = [op(parent, null, "parent"), op(child, parent, "child")];
+  expect((await request.post("/api/batch", { data: { writer: "e2e", device: "Playwright", ops } })).ok()).toBe(true);
+
+  await page.goto(`/b/${child}`);
+  await page.locator(".zoom-header").getByRole("button", { name: "Block menu" }).click();
+  await page.getByRole("menuitem", { name: "Delete block" }).click();
+  await expect(page.locator(`.block-row[data-block="${parent}"]`)).toHaveClass(/revealed/);
+  await expect(page).toHaveURL(new RegExp(`/page/${encodeURIComponent(source)}$`)); // the ?block= goes once shown
+  await expect(page.locator(".block-content")).toHaveText(["parent"]);
+});
+
 test("deleting selected blocks can be undone and redone without opening a block", async ({ page }) => {
   await openFreshPage(page);
   await startWriting(page);
