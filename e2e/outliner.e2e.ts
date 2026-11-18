@@ -1,5 +1,5 @@
 import { expect, test } from "@playwright/test";
-import { createPage, expectSaved, openFreshPage, outlineText, startWriting, unique } from "./helpers";
+import { createPage, expectSaved, journalTitle, openFreshPage, outlineText, startWriting, unique } from "./helpers";
 
 test("typing, Enter and Tab build an outline that survives a reload", async ({ page }) => {
   await openFreshPage(page);
@@ -96,6 +96,50 @@ test("the bullet menu moves a block, with everything under it, to the end of ano
   await page.goto(`/page/${encodeURIComponent(target)}`);
   await expect(page.locator(".block-content")).toHaveText(["already here", "moves", "child"]);
   expect(await outlineText(page)).toBe("already here\nmoves\n  child");
+});
+
+test("choosing a page to move to starts with today's journal, until something is typed", async ({ page }) => {
+  const text = unique("for today");
+  await openFreshPage(page);
+  await startWriting(page);
+  await page.keyboard.type("stays");
+  await page.keyboard.press("Enter");
+  await page.keyboard.type(text);
+  const today = await page.evaluate(() => {
+    const now = new Date();
+    const two = (n: number) => String(n).padStart(2, "0");
+    return `${now.getFullYear()}-${two(now.getMonth() + 1)}-${two(now.getDate())}`;
+  });
+  const title = await journalTitle(page, today);
+
+  await page.locator(".block-bullet").nth(1).click({ button: "right" });
+  await page.getByRole("menuitem", { name: "Move to page…" }).click();
+  const picker = page.getByRole("dialog", { name: "Move to page" });
+  const first = picker.getByRole("option").first();
+  await expect(first).toHaveText(`Today${title}`);
+  await expect(first).toHaveAttribute("aria-selected", "true");
+  await picker.getByRole("searchbox").fill("zz");
+  await expect(picker.getByRole("option").filter({ hasText: "Today" })).toHaveCount(0);
+  await picker.getByRole("searchbox").fill("");
+  await expect(first).toHaveText(`Today${title}`);
+  await page.keyboard.press("Enter");
+  await expect(page.locator(".notice")).toContainText(`Moved to ${title}.`);
+  expect(await outlineText(page)).toBe("stays");
+
+  await page.keyboard.press("Control+k"); // searching doesn't offer today
+  const search = page.getByRole("dialog", { name: "Search" });
+  await expect(search).toBeVisible();
+  await expect(search.getByRole("option").filter({ hasText: "Today" })).toHaveCount(0);
+  await page.keyboard.press("Escape");
+
+  await page.keyboard.press("Control+z");
+  await expect(page.locator(".block-content")).toHaveText(["stays", text]);
+  await page.keyboard.press("Control+Shift+z");
+  await expect(page.locator(".block-content")).toHaveText(["stays"]);
+
+  await expectSaved(page);
+  await page.goto(`/page/${today}`);
+  await expect(page.locator(".block-content").filter({ hasText: text })).toHaveCount(1);
 });
 
 test("moving a zoomed-in block to another page updates its breadcrumb trail", async ({ page, request }) => {

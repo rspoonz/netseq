@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed, nextTick, ref, watch } from "vue";
 import { useRouter } from "vue-router";
-import { journalTitle, pageKey } from "../../../shared/names";
+import { journalName, journalTitle, pageKey } from "../../../shared/names";
 import type { SearchHit } from "../../../shared/types";
 import { fetchSearch } from "../api";
 import { favourites } from "../favourites";
@@ -11,10 +11,11 @@ import { pages } from "../store";
 
 // Search pages (by name, in the browser) and blocks (by text, on the server). Opening a block
 // zooms into it. Before anything is typed it lists the favourites, so Ctrl+K then Enter (or a
-// few ↓) opens one. To choose a page for something else (see pickPage) it lists only pages.
+// few ↓) opens one. To choose a page for something else (see pickPage) it lists only pages, and
+// starts with today's journal, so Enter chooses that.
 
-type Item = { kind: "favourite" | "page" | "new"; name: string } | { kind: "block"; hit: SearchHit };
-const KINDS = { favourite: "Favourite", page: "Page", new: "New page" };
+type Item = { kind: "today" | "favourite" | "page" | "new"; name: string } | { kind: "block"; hit: SearchHit };
+const KINDS = { today: "Today", favourite: "Favourite", page: "Page", new: "New page" };
 
 const router = useRouter();
 const input = ref<HTMLInputElement>();
@@ -27,7 +28,13 @@ let latest = 0;
 
 const items = computed((): Item[] => {
   const q = query.value.trim();
-  if (!q) return favourites.value.map((page) => ({ kind: "favourite", name: page.name }));
+  if (!q) {
+    const names = favourites.value.map((page) => page.name);
+    if (!palette.pick) return names.map((name) => ({ kind: "favourite", name }));
+    const today = journalName(new Date());
+    const others = names.filter((name) => pageKey(name) !== today); // today shows once
+    return [{ kind: "today", name: today }, ...others.map((name): Item => ({ kind: "favourite", name }))];
+  }
   const names = matchPages([...pages.values()].map((page) => page.name), q, 10);
   const list: Item[] = names.map((name) => ({ kind: "page", name }));
   if (!palette.pick) for (const hit of hits.value) list.push({ kind: "block", hit });
